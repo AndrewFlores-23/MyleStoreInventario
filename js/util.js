@@ -185,6 +185,11 @@ export async function comprimirFoto(archivo, lado = 1280, calidad = 0.82) {
   }
 }
 
+// Vuelve al inicio del contenido (el marco no se desplaza; se desplaza .desplazable)
+export function subir(suave = false) {
+  (document.querySelector(".desplazable") || window).scrollTo({ top: 0, behavior: suave ? "smooth" : "auto" });
+}
+
 // ---------- Avisos y errores ----------
 export function avisar(texto, tipo = "listo") {
   const caja = document.getElementById("avisos");

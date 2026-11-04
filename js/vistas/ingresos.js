@@ -3,7 +3,7 @@
 import { datos } from "../datos.js";
 import { estado, cargarProductos } from "../estado.js";
 import { el, icono, dinero, numero, fecha, talla, tela, colorTela, comprimirFoto, campoDinero, contador, trabajando, avisar, mensajeError,
-  abrirHoja, confirmar, TALLAS_COMUNES, COLORES_COMUNES, CATEGORIAS_COMUNES } from "../util.js";
+  abrirHoja, confirmar, subir, TALLAS_COMUNES, COLORES_COMUNES, CATEGORIAS_COMUNES } from "../util.js";
 import { fotoProducto, selectorProducto, productoElegido, botonesFoto, vacio } from "../componentes.js";
 import { abrirFicha } from "./inventario.js";
 
@@ -84,7 +84,7 @@ export async function vistaIngresos(_pagina, ctx) {
   }
 
   // ---------- Modo: producto nuevo o uno que ya existe ----------
-  const zonaProducto = el("div", { style: "display:flex;flex-direction:column;gap:16px" });
+  const zonaProducto = el("div.pila");
   const modo = el("div.selector-modo",
     el("button", { type: "button", "data-modo": "nuevo", onclick: () => cambiarModo("nuevo") }, "Producto nuevo"),
     el("button", { type: "button", "data-modo": "existente", onclick: () => cambiarModo("existente") }, "Ya está en inventario"));
@@ -159,7 +159,7 @@ export async function vistaIngresos(_pagina, ctx) {
   },
     el("div.formulario-ingreso",
       el("div.columna-foto", cajaFoto, botonesFoto(elegirFoto)),
-      el("div", { style: "display:flex;flex-direction:column;gap:16px;min-width:0" },
+      el("div.pila",
         modo,
         zonaProducto,
         el("div.rejilla.tres",
@@ -169,7 +169,7 @@ export async function vistaIngresos(_pagina, ctx) {
         ganancia,
         el("label.campo", el("span", "Nota ", el("em", "(opcional)")), nota),
         error,
-        el("div", { style: "display:flex;justify-content:flex-end" }, boton))));
+        el("div.acciones-form", boton))));
 
   // Marbete con la serie recién asignada
   function confirmarIngreso(ingreso) {
@@ -218,7 +218,7 @@ export async function vistaIngresos(_pagina, ctx) {
     calcular();
     pintarModo();
     pintarFoto();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    subir(true);
   }
 
   // ---------- Historial ----------

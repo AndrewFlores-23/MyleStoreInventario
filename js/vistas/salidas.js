@@ -27,7 +27,7 @@ export async function vistaSalidas(_pagina, ctx) {
   const total = el("div.ganancia");
   const nota = el("input", { placeholder: "Ej.: venta a una vecina, mancha en la manga" });
   const boton = el("button.btn.primario.grande", { type: "submit" }, icono("salida"), "Registrar salida");
-  const motivos = el("div.chips");
+  const motivos = el("div.chips.motivos");
 
   const pintarMotivos = () => {
     motivos.replaceChildren(...OPCIONES.map(([clave, texto, ayuda]) => el("button.chip", {
@@ -88,14 +88,14 @@ export async function vistaSalidas(_pagina, ctx) {
       }
     },
   },
-    el("div", { style: "display:flex;flex-direction:column;gap:16px" },
+    el("div.pila",
       zonaProducto,
       el("div.campo", el("span", "Motivo"), motivos),
       el("div.rejilla.dos", el("div.campo", el("span", "Cantidad que sale"), cantidad), campoPrecio),
       total,
       el("label.campo", el("span", "Nota ", el("em", "(opcional)")), nota),
       error,
-      el("div", { style: "display:flex;justify-content:flex-end" }, boton)));
+      el("div.acciones-form", boton)));
 
   // ---------- Historial ----------
   const lista = el("div.lista");

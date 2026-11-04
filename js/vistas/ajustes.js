@@ -57,7 +57,7 @@ export async function vistaAjustes(_pagina, ctx) {
     ...secciones,
     el("section.panel",
       el("div.panel-titulo", el("h2", "Factura")),
-      el("div", { style: "display:flex;flex-direction:column;gap:14px" },
+      el("div.pila.media",
         el("label.campo", el("span", "Nota al pie de la factura"), entradas.nota_factura),
         el("label.campo", { style: "max-width:260px" }, el("span", "Moneda"), entradas.moneda))),
     error,
@@ -78,13 +78,13 @@ export async function vistaAjustes(_pagina, ctx) {
   ctx.pintar(el("div.ajustes",
     el("div.cabeza", el("div", el("h1", "Ajustes"), el("p", "Datos de la tienda y de pago que ven los clientes en la factura."))),
     form,
-    el("section.panel", { style: "margin-top:16px" },
+    el("section.panel",
       el("div.panel-titulo", el("h2", "Apariencia")),
       selectorTema),
     el("section.panel",
       el("div.panel-titulo", el("h2", "Cuenta")),
       DEMO
-        ? el("div", { style: "display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between" },
+        ? el("div.entre",
           el("p.suave", "Modo demo: los datos son de ejemplo y viven solo en este navegador."),
           el("button.btn.peligro", {
             type: "button",
@@ -95,7 +95,7 @@ export async function vistaAjustes(_pagina, ctx) {
               location.reload();
             },
           }, "Reiniciar demo"))
-        : el("div", { style: "display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between" },
+        : el("div.entre",
           el("p.suave", `Entró como ${estado.usuario?.email || ""}`),
           el("button.btn", { type: "button", onclick: async () => { await datos.salir(); location.reload(); } }, icono("salir"), "Cerrar sesión")))));
 }

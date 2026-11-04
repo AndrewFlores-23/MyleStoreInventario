@@ -126,18 +126,18 @@ export async function abrirFicha(id, { alCambiar } = {}) {
       el("span.cambiar-foto", icono("camara", "chico"), "Cambiar foto"));
 
     const info = editando ? formularioEdicion() : el("div",
-      el("div", { style: "display:flex;align-items:flex-start;justify-content:space-between;gap:12px" },
+      el("div.ficha-cabeza",
         el("div",
-          el("h3", { style: "font-size:20px;line-height:1.25" }, p.nombre),
+          el("h3", p.nombre),
           el("div.renglon-sub", { style: "margin-top:8px" }, p.categoria ? el("span", p.categoria) : null, tela(p.color), !p.activo ? el("span.sello.anulado", { style: "text-decoration:none" }, "Oculto") : null)),
         talla(p.talla, "grande")),
-      el("div.recibo", { style: "margin-top:14px" },
+      el("div.recibo.ficha-recibo",
         linea("Disponibles", p.existencias, p.existencias === 0 ? ".urgente" : p.existencias <= 2 ? ".aviso" : ""),
         linea("Precio de venta", dinero(p.precio_venta)),
         linea("Costo (último ingreso)", dinero(p.costo)),
         linea("Ganancia por unidad", `${dinero(ganancia)} · ${margen} %`, ganancia < 0 ? ".urgente" : ""),
         linea("En inventario a precio de venta", dinero(p.existencias * Number(p.precio_venta)))),
-      el("div", { style: "display:flex;flex-wrap:wrap;gap:8px;margin-top:16px" },
+      el("div.fila-botones.ficha-acciones",
         el("button.btn.primario", { type: "button", onclick: () => { cerrar(); ir(`ingresos?producto=${p.id}`); } }, icono("ingreso"), "Ingresar más"),
         el("button.btn", { type: "button", disabled: p.existencias === 0, onclick: () => { cerrar(); ir(`salidas?producto=${p.id}`); } }, icono("salida"), "Registrar salida"),
         el("button.btn.fantasma", { type: "button", onclick: () => pintar(true) }, icono("editar"), "Editar datos"),
@@ -146,7 +146,7 @@ export async function abrirFicha(id, { alCambiar } = {}) {
           : null,
         !p.activo ? el("button.btn.fantasma", { type: "button", onclick: mostrar }, icono("ojo"), "Volver a mostrar") : null));
 
-    const historial = el("section", { style: "margin-top:22px" },
+    const historial = el("section.ficha-historial",
       el("div.panel-titulo", el("h2", "Historial"), el("span.tenue", { style: "font-size:13px" }, "Entradas con su serie y salidas")),
       movimientos == null ? el("div.cargando", "Cargando…")
         : movimientos.length ? el("div.lista", movimientos.map((m) => renglonMovimiento(m, { mostrarProducto: false })))
@@ -166,7 +166,7 @@ export async function abrirFicha(id, { alCambiar } = {}) {
     const boton = el("button.btn.primario", { type: "submit" }, "Guardar");
     const cats = [...new Set([...estado.productos.map((x) => x.categoria).filter(Boolean), ...CATEGORIAS_COMUNES])];
     return el("form", {
-      style: "display:flex;flex-direction:column;gap:14px",
+      class: "pila media",
       onsubmit: async (ev) => {
         ev.preventDefault();
         error.classList.add("oculto");
@@ -195,7 +195,7 @@ export async function abrirFicha(id, { alCambiar } = {}) {
       el("div.rejilla.dos.siempre", el("label.campo", el("span", "Precio de venta"), precio), el("label.campo", el("span", "Costo"), costo)),
       el("p.tenue", { style: "font-size:13px" }, "Las existencias no se editan aquí: cambian con los ingresos, las salidas y los apartados."),
       error,
-      el("div", { style: "display:flex;gap:8px;justify-content:flex-end" },
+      el("div.acciones-form",
         el("button.btn.fantasma", { type: "button", onclick: () => pintar(false) }, "Cancelar"), boton));
   };
 

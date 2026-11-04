@@ -60,8 +60,9 @@ async function vistaLista(_pagina, ctx) {
   const fila = (ap) => el("a.renglon.apartado-fila", { href: `#/apartados/${ap.id}` },
     cajaDias(ap),
     el("div.renglon-cuerpo",
-      el("div.renglon-titulo", el("span", ap.cliente_nombre), el("span.numero", ap.numero)),
-      el("div.renglon-sub", sellosApartado(ap), el("span.tenue", `${unidades(ap.articulos)} prendas · ${fecha(ap.creado_en)}`))),
+      el("div.renglon-titulo", ap.cliente_nombre),
+      el("div.renglon-sub", sellosApartado(ap)),
+      el("div.renglon-sub.tenue", el("span.numero", ap.numero), `${unidades(ap.articulos)} prendas · ${fecha(ap.creado_en)}`)),
     el("div.renglon-fin", el("div.num", dinero(ap.total)), el("small", ap.pagado ? "pagado" : ap.estado === "anulado" ? "anulado" : "por cobrar")));
 
   const buscar = el("input", { type: "search", placeholder: "Buscar cliente, número o teléfono", value: textoLista, oninput: (e) => { textoLista = e.target.value; pintar(); } });
@@ -113,12 +114,12 @@ async function vistaNuevo(_pagina, ctx) {
       const precio = campoDinero({ value: l.precio, "aria-label": "Precio por unidad", oninput: (e) => { const v = numero(e.target.value); l.precio = v >= 0 ? v : 0; sub.textContent = dinero(l.cantidad * l.precio); pintarTotales(); } });
       return el("div.linea-carrito",
         fotoProducto(l.producto),
-        el("div", { style: "min-width:0" },
+        el("div.info",
           el("div.renglon-titulo", l.producto.nombre),
-          el("div.renglon-sub", talla(l.producto.talla), tela(l.producto.color), el("span.tenue", `de ${l.producto.existencias} disponibles`)),
-          el("div.controles", cuenta, precio,
-            el("button.btn.fantasma.chico", { type: "button", "aria-label": "Quitar", onclick: () => { carrito.splice(i, 1); pintarLineas(); } }, icono("x", "chico"), "Quitar"))),
-        sub);
+          el("div.renglon-sub", talla(l.producto.talla), tela(l.producto.color), el("span.tenue", `de ${l.producto.existencias} disponibles`))),
+        sub,
+        el("div.controles", cuenta, precio,
+          el("button.btn.fantasma.btn-icono.quitar", { type: "button", "aria-label": "Quitar del pedido", title: "Quitar del pedido", onclick: () => { carrito.splice(i, 1); pintarLineas(); } }, icono("x"))));
     }) : [vacio("bolsa", "Agregue las prendas que pidió el cliente.", "Búsquelas arriba por nombre, talla o color.")]));
     pintarTotales();
   };
@@ -164,10 +165,10 @@ async function vistaNuevo(_pagina, ctx) {
     el("section.panel",
       el("div.panel-titulo", el("h2", "Prendas del pedido")),
       selector,
-      el("div", { style: "margin-top:10px" }, lineas)),
+      el("div.carrito", lineas)),
     el("section.panel",
       el("div.panel-titulo", el("h2", "Cliente")),
-      el("div", { style: "display:flex;flex-direction:column;gap:14px" },
+      el("div.pila.media",
         el("label.campo", el("span", "Nombre"), nombre),
         el("label.campo", el("span", "Teléfono o WhatsApp ", el("em", "(para enviarle la factura)")), telefono),
         el("label.campo", el("span", "Dirección o forma de entrega ", el("em", "(opcional)")), direccion),
@@ -213,7 +214,7 @@ async function vistaDetalle(_pagina, ctx, id) {
             el("p.tenue", { style: "margin-top:6px;font-size:13px" }, "Las prendas volvieron al inventario.")) : null,
           el("div.panel",
             el("div.panel-titulo", el("h2", "Enviar la factura")),
-            el("div", { style: "display:flex;flex-direction:column;gap:8px" },
+            el("div.pila.chica",
               el("a.btn.primario", { href: whatsapp(), target: "_blank", rel: "noopener" }, icono("chat"), ap.cliente_telefono ? `WhatsApp a ${telefonoBonito(ap.cliente_telefono)}` : "Enviar por WhatsApp"),
               el("button.btn", { type: "button", onclick: copiarEnlace }, icono("enlace"), "Copiar enlace de la factura"),
               el("button.btn", { type: "button", onclick: () => imprimirFactura(hoja, `Factura ${ap.numero} · ${ap.cliente_nombre}`) }, icono("imprimir"), "Imprimir o guardar PDF"))),
@@ -264,7 +265,7 @@ async function vistaDetalle(_pagina, ctx, id) {
     const { cerrar } = abrirHoja({
       titulo: `Pago de ${ap.numero}`,
       clase: "chica",
-      cuerpo: el("div", { style: "display:flex;flex-direction:column;gap:14px" },
+      cuerpo: el("div.pila.media",
         el("div.recibo", el("div.linea.total", el("span.et", "Total"), el("span.puntos"), el("span.val", dinero(ap.total)))),
         el("label.campo", el("span", "Comprobante ", el("em", "(opcional)")), ref)),
       pie: [el("button.btn.fantasma", { type: "button", onclick: () => cerrar() }, "Volver"), boton],
@@ -308,7 +309,7 @@ async function vistaDetalle(_pagina, ctx, id) {
     const { cerrar } = abrirHoja({
       titulo: `Anular ${ap.numero}`,
       clase: "chica",
-      cuerpo: el("div", { style: "display:flex;flex-direction:column;gap:14px" },
+      cuerpo: el("div.pila.media",
         el("p.suave", `Las ${unidades(ap.articulos)} prendas vuelven a estar disponibles. La factura queda marcada como anulada.`),
         ap.pagado ? el("div.error-form", "Este apartado está pagado: recuerde devolverle el dinero al cliente.") : null,
         el("label.campo", el("span", "Motivo ", el("em", "(opcional)")), motivo)),
@@ -337,7 +338,7 @@ async function vistaDetalle(_pagina, ctx, id) {
     const boton = el("button.btn.primario", { type: "button" }, "Guardar");
     const { cerrar } = abrirHoja({
       titulo: `Cliente de ${ap.numero}`,
-      cuerpo: el("div", { style: "display:flex;flex-direction:column;gap:14px" },
+      cuerpo: el("div.pila.media",
         el("label.campo", el("span", "Nombre"), nombre),
         el("div.rejilla.dos", el("label.campo", el("span", "Teléfono"), telefono), el("label.campo", el("span", "Envío"), envio)),
         el("label.campo", el("span", "Dirección o forma de entrega"), direccion),

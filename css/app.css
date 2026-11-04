@@ -91,12 +91,15 @@ p { margin: 0; }
 .oculto { display: none !important; }
 :focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
 
-/* ---------- Marco de la app ---------- */
-.marco { display: grid; grid-template-columns: 228px minmax(0, 1fr); min-height: 100dvh; }
+/* ---------- Marco de la app ----------
+   Se comporta como app: el cuerpo no se desplaza ni rebota; el menú (o las pestañas en el celular) queda quieto
+   y solo se desplaza el contenido, dentro de .desplazable. */
+html { height: 100%; overscroll-behavior: none; }
+body.app { height: 100%; overflow: hidden; overscroll-behavior: none; }
+.marco { display: grid; grid-template-columns: 228px minmax(0, 1fr); height: 100dvh; }
 
 .lateral {
-  position: sticky;
-  top: 0;
+  position: relative;
   height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -161,8 +164,28 @@ p { margin: 0; }
 
 .barra-movil { display: none; }
 
-.principal { min-width: 0; }
-.pagina { max-width: 1160px; margin: 0 auto; padding: 28px 32px 90px; }
+.principal { display: flex; flex-direction: column; min-width: 0; height: 100dvh; }
+.desplazable {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--borde-fuerte) transparent;
+}
+/* Ritmo vertical de cada pantalla: el espacio entre bloques lo da el gap, no márgenes sueltos */
+.pagina {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 28px 32px calc(40px + env(safe-area-inset-bottom));
+}
+.pagina > * { min-width: 0; }
 
 .aviso-demo {
   padding: 8px 32px;
@@ -177,8 +200,8 @@ p { margin: 0; }
   .lateral { display: none; }
   .barra-movil {
     display: block;
-    position: sticky;
-    top: 0;
+    flex: none;
+    position: relative;
     z-index: 20;
     background: color-mix(in srgb, var(--panel) 94%, transparent);
     backdrop-filter: blur(10px);
@@ -228,7 +251,7 @@ p { margin: 0; }
     font: 700 10px/16px var(--f-num);
     text-align: center;
   }
-  .pagina { padding: 18px 16px 90px; }
+  .pagina { gap: 14px; padding: 18px 16px calc(28px + env(safe-area-inset-bottom)); }
   .aviso-demo { padding: 7px 16px; font-size: 12px; }
 }
 
@@ -237,12 +260,12 @@ p { margin: 0; }
 .ico.chico { width: 16px; height: 16px; }
 
 /* ---------- Encabezado de página ---------- */
-.cabeza { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 22px; }
+.cabeza { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px; margin-bottom: 6px; }
 .cabeza h1 { font-size: 32px; font-weight: 500; line-height: 1.1; }
 @media (max-width: 640px) { .cabeza h1 { font-size: 28px; } }
 .cabeza p { margin-top: 3px; color: var(--texto-2); font-size: 14px; }
 .cabeza .acciones { display: flex; flex-wrap: wrap; gap: 8px; }
-.volver { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px; color: var(--texto-2); text-decoration: none; font-size: 14px; }
+.volver { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; min-height: 32px; margin-bottom: -8px; color: var(--texto-2); text-decoration: none; font-size: 14px; }
 .volver:hover { color: var(--texto); }
 
 /* ---------- Botones ---------- */
@@ -279,8 +302,13 @@ p { margin: 0; }
 .btn.fantasma:hover { background: var(--panel-2); color: var(--texto); }
 .btn.peligro { background: transparent; color: var(--urgente); border-color: color-mix(in srgb, var(--urgente) 40%, transparent); }
 .btn.peligro:hover { background: color-mix(in srgb, var(--urgente) 10%, transparent); }
-.btn.chico { min-height: 32px; padding: 0 10px; font-size: 13px; }
-.btn.grande { min-height: 46px; padding: 0 20px; font-size: 15px; }
+.btn.chico { min-height: 34px; padding: 0 12px; font-size: 13px; }
+.btn.grande { min-height: 48px; padding: 0 22px; font-size: 15px; }
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  .btn.chico { min-height: 38px; }
+  .btn-icono { width: 44px; }
+}
 .btn.ancho { width: 100%; }
 .btn-icono { width: 36px; padding: 0; }
 
@@ -305,7 +333,7 @@ input[type="number"], input:not([type]), select, textarea {
   border-radius: 10px;
   background: var(--hundido);
   color: var(--texto);
-  font-size: 15px;
+  font-size: 16px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
@@ -376,13 +404,23 @@ input[type="number"]::-webkit-inner-spin-button { opacity: 0.4; }
 .contador input { width: 64px; min-height: 40px; border: 0; border-radius: 0; background: transparent; text-align: center; font-size: 18px; box-shadow: none !important; }
 .contador input::-webkit-inner-spin-button { display: none; }
 .contador.chico button { width: 32px; font-size: 17px; }
-.contador.chico input { width: 44px; min-height: 34px; font-size: 15px; }
+.contador.chico input { width: 44px; min-height: 34px; font-size: 16px; }
 
 .error-form { padding: 10px 12px; border-radius: 7px; background: color-mix(in srgb, var(--urgente) 12%, transparent); color: var(--urgente); font-size: 14px; }
 
 /* ---------- Paneles y listas ---------- */
 .panel { padding: 20px; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--panel); }
-.panel + .panel { margin-top: 16px; }
+.pila { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.pila.media { gap: 12px; }
+.pila.chica { gap: 8px; }
+.fila-botones { display: flex; flex-wrap: wrap; gap: 8px; }
+.entre { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.acciones-form { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+@media (max-width: 640px) {
+  .acciones-form .btn { flex: 1 1 auto; }
+  .cabeza .acciones { width: 100%; }
+  .cabeza .acciones .btn { flex: 1; }
+}
 .resumen-cifras > .panel, .dos-columnas > .panel, .acciones-apartado > .panel { margin-top: 0; }
 .panel-titulo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
 .panel-titulo h2 { font-size: 19px; font-weight: 600; }
@@ -392,7 +430,11 @@ input[type="number"]::-webkit-inner-spin-button { opacity: 0.4; }
 
 .dos-columnas { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .dos-columnas.iguales { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (max-width: 960px) { .dos-columnas, .dos-columnas.iguales { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 960px) {
+  .dos-columnas, .dos-columnas.iguales { grid-template-columns: minmax(0, 1fr); }
+  /* En el detalle del apartado, primero lo que se hace (pago, entrega, enviar) y después la factura */
+  .dos-columnas > .acciones-apartado { order: -1; }
+}
 
 .lista { display: flex; flex-direction: column; }
 .renglon {
@@ -444,7 +486,7 @@ button.renglon:first-child { border-top: 0; }
 .resumen-cifras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 @media (max-width: 760px) { .resumen-cifras { grid-template-columns: minmax(0, 1fr); } }
 
-.atajos { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.atajos { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 640px) {
   .atajos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .atajos .btn { flex-direction: column; gap: 4px; min-height: 64px; padding: 6px; font-size: 12.5px; white-space: normal; line-height: 1.15; text-align: center; }
@@ -565,7 +607,7 @@ button.renglon:first-child { border-top: 0; }
 .sello.salida { color: var(--texto-2); border-color: transparent; background: var(--panel-2); }
 
 /* ---------- Inventario ---------- */
-.filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
+.filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .filtros .buscar { flex: 1 1 260px; position: relative; }
 .filtros .buscar .ico { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--texto-3); pointer-events: none; }
 .filtros .buscar input { padding-left: 38px; }
@@ -575,7 +617,7 @@ button.renglon:first-child { border-top: 0; }
 .interruptor { display: inline-flex; align-items: center; gap: 8px; color: var(--texto-2); font-size: 14px; cursor: pointer; white-space: nowrap; }
 .interruptor input { width: 16px; height: 16px; accent-color: var(--acento); }
 
-.totales-inventario { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: -6px 0 16px; color: var(--texto-2); font-size: 13px; }
+.totales-inventario { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: -4px 0 -2px; color: var(--texto-2); font-size: 13px; }
 .totales-inventario b { color: var(--texto); font-family: var(--f-num); font-weight: 600; }
 
 .prendas { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
@@ -724,7 +766,7 @@ button.renglon:first-child { border-top: 0; }
 .marbete .cantidad { margin-top: 8px; font-size: 13px; color: #7c4b5a; }
 
 /* ---------- Apartados ---------- */
-.pestanas-filtro { display: flex; gap: 4px; margin-bottom: 16px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--borde); }
+.pestanas-filtro { display: flex; gap: 4px; margin-bottom: -2px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--borde); }
 .pestanas-filtro::-webkit-scrollbar { display: none; }
 .pestanas-filtro button {
   flex: none;
@@ -743,14 +785,23 @@ button.renglon:first-child { border-top: 0; }
 .pestanas-filtro button[aria-pressed="true"] { color: var(--texto); border-bottom-color: var(--acento); }
 .pestanas-filtro .n { font: 600 12px var(--f-num); color: var(--texto-3); }
 
-.apartado-fila .renglon-titulo { display: flex; align-items: center; gap: 8px; }
-.apartado-fila .numero { font: 500 12.5px var(--f-mono); color: var(--texto-3); }
+.apartado-fila .renglon-sub + .renglon-sub { margin-top: 5px; }
+.apartado-fila .numero { font: 500 12px var(--f-mono); color: var(--texto-3); }
+@media (max-width: 640px) {
+  .chips.motivos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .chips.motivos .chip { min-height: 44px; padding: 6px 10px; border-radius: 12px; line-height: 1.2; }
+  .chips.motivos .chip:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
 
-.linea-carrito { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--borde); }
+.linea-carrito { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px 12px; align-items: center; padding: 14px 0; border-top: 1px solid var(--borde); }
 .linea-carrito:first-child { border-top: 0; }
-.linea-carrito .controles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
-.linea-carrito .controles .dinero-campo { width: 130px; }
-.linea-carrito .controles .dinero-campo input { min-height: 34px; font-size: 15px; padding-top: 4px; padding-bottom: 4px; }
+.linea-carrito .info { min-width: 0; }
+.linea-carrito .controles { grid-column: 2 / -1; display: flex; align-items: center; gap: 8px; }
+.linea-carrito .controles .dinero-campo { flex: 1 1 110px; max-width: 160px; }
+.linea-carrito .controles .quitar { margin-left: auto; color: var(--texto-3); }
+.linea-carrito .controles .quitar:hover { color: var(--urgente); }
+@media (max-width: 640px) { .linea-carrito .controles { grid-column: 1 / -1; } .linea-carrito .controles .dinero-campo { max-width: none; } }
+.linea-carrito .controles .dinero-campo input { min-height: 34px; font-size: 16px; padding-top: 4px; padding-bottom: 4px; }
 .linea-carrito .subtotal { font: 600 16px var(--f-num); text-align: right; }
 
 .acciones-apartado { display: flex; flex-direction: column; gap: 10px; }
@@ -923,7 +974,7 @@ dialog.hoja::backdrop { background: rgba(59, 19, 34, 0.45); backdrop-filter: blu
 }
 
 /* ---------- Avisos ---------- */
-#avisos { position: fixed; left: 50%; bottom: 22px; z-index: 100; display: flex; flex-direction: column; align-items: center; gap: 8px; transform: translateX(-50%); pointer-events: none; width: max-content; max-width: calc(100vw - 32px); }
+#avisos { position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); z-index: 100; display: flex; flex-direction: column; align-items: center; gap: 8px; transform: translateX(-50%); pointer-events: none; width: max-content; max-width: calc(100vw - 32px); }
 .toast {
   display: flex;
   align-items: center;
@@ -965,7 +1016,7 @@ dialog.hoja::backdrop { background: rgba(59, 19, 34, 0.45); backdrop-filter: blu
 .enlace-btn:hover { color: var(--acento); }
 
 /* ---------- Ajustes ---------- */
-.ajustes { max-width: 760px; }
+.ajustes { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 760px; }
 .ajustes form { display: flex; flex-direction: column; gap: 16px; }
 .guardar-fijo { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 10px; padding: 14px 0 calc(14px + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--fondo) 70%, transparent); }
 
@@ -1001,3 +1052,28 @@ body.publica { background: radial-gradient(900px 600px at 50% -10%, #f7d3db, tra
 .botones-foto .btn { flex: 1; }
 .ficha .botones-foto { max-width: 240px; }
 @media (max-width: 760px) { .formulario-ingreso .botones-foto { max-width: none; } .formulario-ingreso .botones-foto .btn { min-height: 44px; } }
+
+/* ---------- Toque en el celular ----------
+   Los campos llevan letra de 16 px o más para que el iPhone no haga zoom al escribir (eso corría la pantalla).
+   Además: sin doble toque para acercar, sin resaltado gris al tocar y sin seleccionar texto en menús y botones. */
+a, button, label, summary, .prenda, .chip { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.nav, .pestanas, .btn, .chip, .pestanas-filtro, .selector-modo, .marca { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* La entrada también va quieta: se desplaza solo su propio contenido si hace falta */
+.acceso { height: 100dvh; overflow-y: auto; overscroll-behavior: contain; }
+
+/* Pequeños acomodos de distribución */
+.carrito { margin-top: 10px; }
+.ficha-cabeza { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.ficha-cabeza h3 { font-size: 20px; line-height: 1.25; }
+.ficha-recibo { margin-top: 14px; }
+.ficha-acciones { margin-top: 16px; }
+.ficha-historial { margin-top: 22px; }
+@media (max-width: 640px) {
+  .ficha-acciones .btn.primario, .ficha-acciones .btn:not(.fantasma) { flex: 1 1 140px; }
+  .dos-columnas, .resumen-cifras { gap: 14px; }
+}
+
+@media print {
+  html, body.app { height: auto !important; overflow: visible !important; }
+}

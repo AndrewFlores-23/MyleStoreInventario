@@ -1,7 +1,7 @@
 // Myle Store · entrada, marco de la app (menú lateral en compu, pestañas en el celular) y rutas
 import { iniciarDatos, datos, DEMO, recordando, ultimoCorreo } from "./datos.js";
 import { estado, cargarAjustes, cargarProductos, ponerPendientes } from "./estado.js";
-import { $, el, icono, adorno, mensajeError, trabajando, avisar } from "./util.js";
+import { $, el, icono, adorno, subir, mensajeError, trabajando, avisar } from "./util.js";
 import { vistaInicio } from "./vistas/inicio.js";
 import { vistaInventario } from "./vistas/inventario.js";
 import { vistaIngresos } from "./vistas/ingresos.js";
@@ -150,8 +150,9 @@ function armarMarco() {
         el("div.fila-marca", marca(),
           el("a.btn.fantasma.btn-icono", { href: "#/ajustes", "aria-label": "Ajustes", "data-ruta": "ajustes" }, icono("ajustes"))),
         el("nav.pestanas", SECCIONES.filter((s) => !s.soloLateral).map((s) => enlace(s, true)))),
-      DEMO ? el("div.aviso-demo", "Modo demo: los datos son de ejemplo y se guardan solo en este navegador.") : null,
-      el("main.pagina"))));
+      el("div.desplazable",
+        DEMO ? el("div.aviso-demo", "Modo demo: los datos son de ejemplo y se guardan solo en este navegador.") : null,
+        el("main.pagina")))));
 }
 
 function enrutar() {
@@ -177,7 +178,7 @@ function enrutar() {
     vigente: () => turno === turnoRuta,
     pintar: (...nodos) => { if (turno === turnoRuta) pagina.replaceChildren(...nodos.filter(Boolean)); },
   };
-  window.scrollTo(0, 0);
+  subir();
   Promise.resolve(seccion.vista(pagina, ctx)).catch((e) => {
     console.error(e);
     ctx.pintar(el("div.vacio", icono("alerta"), el("p", "No se pudo cargar esta sección."), el("p", mensajeError(e)),

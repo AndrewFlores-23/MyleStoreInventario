@@ -57,7 +57,7 @@ export async function vistaInicio(_pagina, ctx) {
           linea(`Cobrado en ${mes}`, dinero(cobradoMes), cobradoMes ? ".listo" : ""),
           linea(`Ventas directas en ${mes}`, dinero(ventasMes)),
           linea(`Total vendido en ${mes}`, dinero(cobradoMes + ventasMes), "", null)))),
-    el("div.dos-columnas.iguales", { style: "margin-top:16px" },
+    el("div.dos-columnas.iguales",
       el("section.panel",
         el("div.panel-titulo", el("h2", "Por entregar"), el("a", { href: "#/apartados/nuevo" }, "+ Nuevo apartado")),
         porEntregar.length
@@ -77,7 +77,7 @@ export async function vistaInicio(_pagina, ctx) {
             el("div.renglon-fin",
               p.existencias === 0 ? el("span.sello.agotado", "Agotado") : el("div.num", { style: "color:var(--aviso)" }, `Quedan ${p.existencias}`)))))
           : vacio("percha", "Todo tiene existencias.", "Aquí salen los productos con 2 unidades o menos."))),
-    el("section.panel", { style: "margin-top:16px" },
+    el("section.panel",
       el("div.panel-titulo", el("h2", "Últimos movimientos")),
       ultimos.length
         ? el("div.lista", ultimos.map((m) => renglonMovimiento(m, { alAbrir: (x) => abrirFicha(x.producto_id) })))
