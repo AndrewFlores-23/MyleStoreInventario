@@ -4,7 +4,7 @@ import { datos } from "../datos.js";
 import { estado, cargarProductos } from "../estado.js";
 import { el, icono, dinero, numero, fecha, talla, tela, colorTela, comprimirFoto, campoDinero, contador, trabajando, avisar, mensajeError,
   abrirHoja, confirmar, TALLAS_COMUNES, COLORES_COMUNES, CATEGORIAS_COMUNES } from "../util.js";
-import { fotoProducto, selectorProducto, productoElegido, vacio } from "../componentes.js";
+import { fotoProducto, selectorProducto, productoElegido, botonesFoto, vacio } from "../componentes.js";
 import { abrirFicha } from "./inventario.js";
 
 export async function vistaIngresos(_pagina, ctx) {
@@ -158,7 +158,7 @@ export async function vistaIngresos(_pagina, ctx) {
     },
   },
     el("div.formulario-ingreso",
-      el("div", cajaFoto),
+      el("div.columna-foto", cajaFoto, botonesFoto(elegirFoto)),
       el("div", { style: "display:flex;flex-direction:column;gap:16px;min-width:0" },
         modo,
         zonaProducto,

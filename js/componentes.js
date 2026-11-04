@@ -23,6 +23,21 @@ export function fotoProducto(p, clase = "miniatura") {
 
 export const detallesProducto = (p) => [talla(p.talla), tela(p.color)];
 
+// Botones de la foto: en el celular, «Tomar foto» abre directo la cámara de atrás y «Galería» elige una guardada.
+// En la compu (sin pantalla táctil) queda un solo botón para elegir el archivo.
+export function botonesFoto(alElegir, { chico = false } = {}) {
+  const tactil = matchMedia("(pointer: coarse)").matches;
+  const entrada = (camara) => el("input.oculto", {
+    type: "file", accept: "image/*", capture: camara ? "environment" : null, tabindex: "-1",
+    onchange: (e) => { const archivo = e.target.files[0]; e.target.value = ""; if (archivo) alElegir(archivo); },
+  });
+  const camara = entrada(true), galeria = entrada(false);
+  const boton = "button.btn" + (chico ? ".chico" : "");
+  return el("div.botones-foto", camara, galeria,
+    tactil ? el(boton, { type: "button", onclick: () => camara.click() }, icono("camara", "chico"), "Tomar foto") : null,
+    el(boton, { type: "button", onclick: () => galeria.click() }, icono("galeria", "chico"), tactil ? "Galería" : "Elegir foto"));
+}
+
 export function nombreCompleto(p) {
   return [p.nombre, p.talla && `talla ${p.talla}`, p.color].filter(Boolean).join(" · ");
 }

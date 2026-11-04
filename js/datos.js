@@ -12,13 +12,41 @@ export async function iniciarDatos() {
   return datos;
 }
 
+// ---------- Sesión guardada ----------
+// Con «Mantener la sesión iniciada» (lo normal), la sesión queda en este dispositivo hasta cerrar sesión y Supabase
+// la renueva sola. Sin marcarla, dura lo que la pestaña esté abierta. El último correo se recuerda para la entrada.
+const MARCA_NO_RECORDAR = "myle-no-recordar";
+const CLAVE_CORREO = "myle-correo";
+const local = {
+  leer(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  poner(k, v) { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento: la sesión dura lo que la pestaña */ } },
+  quitar(k) { try { localStorage.removeItem(k); } catch { /* nada que quitar */ } },
+};
+export const recordando = () => local.leer(MARCA_NO_RECORDAR) !== "1";
+export const ultimoCorreo = () => local.leer(CLAVE_CORREO) || "";
+function recordarSesion(si, email) {
+  if (si) local.quitar(MARCA_NO_RECORDAR); else local.poner(MARCA_NO_RECORDAR, "1");
+  if (si && email) local.poner(CLAVE_CORREO, email); else local.quitar(CLAVE_CORREO);
+}
+const almacenSesion = {
+  getItem(k) { try { return sessionStorage.getItem(k) ?? localStorage.getItem(k); } catch { return null; } },
+  setItem(k, v) {
+    try {
+      const [usar, limpiar] = recordando() ? [localStorage, sessionStorage] : [sessionStorage, localStorage];
+      usar.setItem(k, v);
+      limpiar.removeItem(k);
+    } catch { /* sin almacenamiento */ }
+  },
+  removeItem(k) { try { sessionStorage.removeItem(k); localStorage.removeItem(k); } catch { /* nada que quitar */ } },
+};
+
 const LISTA_APARTADOS = "*, articulos:apartado_articulos(*)";
 const LISTA_MOVIMIENTOS = "*, producto:productos(id, nombre, talla, color, foto_path), apartado:apartados(id, numero, estado, cliente_nombre)";
 
 async function crearReal() {
   const { createClient } = await import(SUPABASE_JS);
   const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "implicit" },
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "implicit", storage: almacenSesion },
   });
   const fotos = sb.storage.from("productos");
   const respuesta = ({ data, error }) => {
@@ -36,7 +64,8 @@ async function crearReal() {
     alCambiarSesion(fn) {
       sb.auth.onAuthStateChange((evento, sesion) => fn(evento, sesion?.user || null));
     },
-    async entrar(email, clave) {
+    async entrar(email, clave, recordar = true) {
+      recordarSesion(recordar, email);
       respuesta(await sb.auth.signInWithPassword({ email, password: clave }));
     },
     async salir() {

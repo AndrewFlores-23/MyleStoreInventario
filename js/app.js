@@ -1,5 +1,5 @@
 // Myle Store · entrada, marco de la app (menú lateral en compu, pestañas en el celular) y rutas
-import { iniciarDatos, datos, DEMO } from "./datos.js";
+import { iniciarDatos, datos, DEMO, recordando, ultimoCorreo } from "./datos.js";
 import { estado, cargarAjustes, cargarProductos, ponerPendientes } from "./estado.js";
 import { $, el, icono, adorno, mensajeError, trabajando, avisar } from "./util.js";
 import { vistaInicio } from "./vistas/inicio.js";
@@ -40,15 +40,16 @@ function acceso(...contenido) {
 // ---------- Entrada ----------
 function pantallaEntrada(mensaje) {
   const error = el("div.error-form" + (mensaje ? "" : ".oculto"), mensaje || "");
-  const correo = el("input", { type: "email", autocomplete: "username", required: true, placeholder: "correo@ejemplo.com", inputmode: "email" });
+  const correo = el("input", { type: "email", autocomplete: "username", required: true, placeholder: "correo@ejemplo.com", inputmode: "email", value: ultimoCorreo() });
   const clave = el("input", { type: "password", autocomplete: "current-password", required: true });
+  const recordar = el("input", { type: "checkbox", checked: recordando() });
   const boton = el("button.btn.primario.grande", { type: "submit" }, "Entrar");
   const form = el("form", {
     onsubmit: async (ev) => {
       ev.preventDefault();
       error.classList.add("oculto");
       try {
-        await trabajando(boton, () => datos.entrar(correo.value.trim(), clave.value), "Entrando…");
+        await trabajando(boton, () => datos.entrar(correo.value.trim(), clave.value, recordar.checked), "Entrando…");
         await entrarApp(await datos.usuario());
       } catch (e) {
         error.textContent = mensajeError(e);
@@ -58,11 +59,13 @@ function pantallaEntrada(mensaje) {
   },
     el("label.campo", el("span", "Correo"), correo),
     el("label.campo", el("span", "Contraseña"), clave),
+    el("label.interruptor.recordar", recordar,
+      el("span", "Mantener la sesión iniciada", el("small", "En este dispositivo, hasta que cierre sesión"))),
     error,
     boton);
   app.replaceChildren(acceso(form,
     el("div.enlace", el("button.enlace-btn", { type: "button", onclick: () => pantallaRecuperar(correo.value.trim()) }, "¿Olvidó la contraseña?"))));
-  correo.focus();
+  (correo.value ? clave : correo).focus();
 }
 
 function pantallaRecuperar(correoAntes = "") {

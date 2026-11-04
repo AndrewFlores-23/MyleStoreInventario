@@ -7,6 +7,8 @@ Sistema de inventario para una tienda de ropa que vende en línea desde casa. Fu
 - **Salidas:** venta directa, prenda dañada, devolución al proveedor, regalo o ajuste de conteo.
 - **Apartados:** el pedido armado para un cliente que todavía no se entrega. Al crearlo, las prendas **se restan del inventario disponible** y se genera la **factura** con los datos del cliente, el total de artículos, el envío, el monto total y los datos de depósito (SINPE Móvil y cuenta IBAN). Después se marca como **pagado (cancelado)** y como **entregado**. Si el cliente no sigue, se anula y las prendas vuelven al inventario.
 - **Factura:** se envía por WhatsApp con un enlace que el cliente abre sin cuenta, o se imprime o se guarda en PDF.
+- **Fotos:** en el celular, «Tomar foto» abre directo la cámara de atrás y «Galería» elige una foto guardada.
+- **Entrada:** con «Mantener la sesión iniciada» no hay que volver a escribir la contraseña en ese dispositivo hasta cerrar sesión. La app se puede instalar en la pantalla de inicio del celular (en iPhone: Compartir → «Agregar a inicio»; en Android: menú → «Instalar app»).
 
 Es HTML, CSS y JavaScript sin compilar, con [Supabase](https://supabase.com) como base de datos y lugar para las fotos.
 

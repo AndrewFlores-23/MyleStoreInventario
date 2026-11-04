@@ -3,7 +3,7 @@ import { datos } from "../datos.js";
 import { estado, cargarProductos, ir } from "../estado.js";
 import { el, icono, dinero, talla, tela, sinTildes, abrirHoja, avisar, mensajeError, trabajando, comprimirFoto, campoDinero, numero, confirmar,
   CATEGORIAS_COMUNES, COLORES_COMUNES } from "../util.js";
-import { fotoProducto, renglonMovimiento, vacio } from "../componentes.js";
+import { fotoProducto, renglonMovimiento, botonesFoto, vacio } from "../componentes.js";
 
 const filtro = { texto: "", categoria: "", agotados: true, ocultos: false };
 
@@ -152,7 +152,7 @@ export async function abrirFicha(id, { alCambiar } = {}) {
         : movimientos.length ? el("div.lista", movimientos.map((m) => renglonMovimiento(m, { mostrarProducto: false })))
           : vacio("caja", "Sin movimientos."));
 
-    cuerpo.replaceChildren(el("div.ficha", foto, info), historial);
+    cuerpo.replaceChildren(el("div.ficha", el("div.columna-foto", foto, botonesFoto(cambiarFoto, { chico: true })), info), historial);
   };
 
   const formularioEdicion = () => {
