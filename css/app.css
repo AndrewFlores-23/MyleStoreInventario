@@ -461,10 +461,26 @@ button.renglon:first-child { border-top: 0; }
 .miniatura { width: 44px; height: 54px; flex: none; border-radius: 5px; object-fit: cover; background: var(--panel-2); }
 .miniatura.marcador { display: grid; place-items: center; color: var(--texto-3); }
 
-.vacio { padding: 36px 16px; text-align: center; color: var(--texto-2); }
-.vacio .ico { width: 34px; height: 34px; margin: 0 auto 10px; color: var(--texto-3); stroke-width: 1.4; }
+/* Mensaje de lista vacía: centrado y a todo el ancho, también dentro de una cuadrícula */
+.vacio {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--texto-2);
+}
+.vacio > .ico { width: 34px; height: 34px; margin: 0 0 10px; color: var(--texto-3); stroke-width: 1.4; }
+.vacio p { max-width: 360px; }
 .vacio p + p { margin-top: 4px; font-size: 14px; color: var(--texto-3); }
 .vacio .btn { margin-top: 14px; }
+/* Vacío de una pantalla entera (inventario sin productos): en su propio panel */
+.prendas > .vacio { padding: 44px 16px; border: 1px dashed var(--borde-fuerte); border-radius: var(--radio); background: var(--panel); }
+.prendas > .vacio > .ico { width: 44px; height: 44px; }
 
 .cargando { padding: 40px; text-align: center; color: var(--texto-3); }
 
