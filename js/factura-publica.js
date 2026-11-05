@@ -1,7 +1,7 @@
 // Página que abre el cliente desde el enlace de WhatsApp: su factura, cómo pagar y botón para enviar el comprobante
 import { iniciarDatos, datos } from "./datos.js";
 import { $, el, icono, ponerMoneda, telefonoWa, mensajeError, avisar } from "./util.js";
-import { armarFactura, imprimirFactura } from "./factura.js";
+import { armarFactura, imprimirFactura, compartirFactura } from "./factura.js";
 
 const caja = $("#factura");
 const token = new URLSearchParams(location.search).get("t");
@@ -31,6 +31,7 @@ async function mostrar() {
         ap.estado !== "anulado" && tel
           ? el("a.btn.primario.grande", { href: `https://wa.me/${tel}?text=${texto}`, target: "_blank", rel: "noopener" }, icono("chat"), ap.pagado ? "Escribir a la tienda" : "Enviar comprobante por WhatsApp")
           : null,
+        el("button.btn.grande", { type: "button", onclick: async () => { const r = await compartirFactura({ titulo: document.title, texto: `${ap.pagado ? "Recibo" : "Factura"} ${ap.numero} · ${tienda?.nombre_tienda || "Myle Store"}`, enlace: location.href }); if (r === "copiado") avisar("Enlace copiado"); } }, icono("compartir"), "Compartir"),
         el("button.btn.grande", { type: "button", onclick: () => imprimirFactura(hoja, document.title) }, icono("imprimir"), "Guardar o imprimir")));
   } catch (e) {
     console.error(e);

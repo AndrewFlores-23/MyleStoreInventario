@@ -5,7 +5,7 @@ import { estado, cargarProductos, ponerPendientes, ir } from "../estado.js";
 import { el, icono, dinero, numero, fecha, fechaHora, hace, talla, tela, sinTildes, telefonoBonito, telefonoWa, campoDinero, contador,
   trabajando, avisar, mensajeError, abrirHoja, confirmar } from "../util.js";
 import { fotoProducto, selectorProducto, sellosApartado, cajaDias, unidades, vacio } from "../componentes.js";
-import { armarFactura, textoWhatsApp, enlaceFactura, imprimirFactura } from "../factura.js";
+import { armarFactura, textoWhatsApp, enlaceFactura, imprimirFactura, compartirFactura } from "../factura.js";
 
 export function vistaApartados(pagina, ctx) {
   const [primera] = ctx.partes;
@@ -196,28 +196,45 @@ async function vistaDetalle(_pagina, ctx, id) {
   const enlace = enlaceFactura(ap.token);
   contarPendientes();
 
+  // Franja con el estado del pedido de un vistazo
+  const franja = () => {
+    const n = unidades(ap.articulos);
+    const prendas = `${n} prenda${n === 1 ? "" : "s"}`;
+    if (ap.estado === "anulado") return el("div.franja-estado.anulado", icono("anular"), el("div", el("strong", "Anulado"), el("span", `${fecha(ap.anulado_en)} · ${prendas} de vuelta al inventario`)));
+    if (ap.estado === "entregado" && ap.pagado) return el("div.franja-estado.vendido", icono("check"), el("div", el("strong", `Vendido · ${dinero(ap.total)}`), el("span", `Entregado el ${fecha(ap.entregado_en)} · ${prendas}`)));
+    if (ap.estado === "entregado") return el("div.franja-estado.aviso", icono("billete"), el("div", el("strong", `Entregado · falta cobrar ${dinero(ap.total)}`), el("span", `Entregado el ${fecha(ap.entregado_en)} · ${prendas}`)));
+    if (ap.pagado) return el("div.franja-estado.listo", icono("entrega"), el("div", el("strong", `Pagado · listo para entregar`), el("span", `${dinero(ap.total)} · ${prendas} · apartado ${hace(ap.creado_en)}`)));
+    return el("div.franja-estado.pendiente", icono("billete"), el("div", el("strong", `Pendiente de pago · ${dinero(ap.total)}`), el("span", `${prendas} · apartado ${hace(ap.creado_en)}`)));
+  };
+
   const pintar = () => {
     const hoja = armarFactura({ tienda: estado.ajustes, apartado: ap, articulos: ap.articulos, urlFoto: (r) => datos.urlFoto(r), interna: true });
     const anulado = ap.estado === "anulado";
+    // En el celular la factura va plegada (se abre con un toque); en la compu siempre a la vista
+    const factura = el("details.factura-plegable", { open: !matchMedia("(max-width: 960px)").matches },
+      el("summary", el("span", icono("imprimir", "chico"), ap.pagado ? "Ver el recibo" : "Ver la factura"), icono("atras", "chico flecha")),
+      el("div.contenedor-factura", hoja));
     ctx.pintar(
       el("a.volver", { href: "#/apartados" }, icono("atras", "chico"), "Apartados"),
       el("div.cabeza",
         el("div",
           el("h1", ap.cliente_nombre),
-          el("div.renglon-sub", { style: "margin-top:6px" }, el("span.serie", ap.numero), sellosApartado(ap), el("span.tenue", `Apartado ${hace(ap.creado_en)}`)))),
+          el("div.renglon-sub", { style: "margin-top:6px" }, el("span.serie", ap.numero), sellosApartado(ap)))),
+      franja(),
       el("div.dos-columnas",
-        el("div.contenedor-factura", hoja),
+        factura,
         el("aside.acciones-apartado",
           anulado ? null : pasoPago(),
           anulado ? null : pasoEntrega(),
           anulado ? el("div.panel", el("p", `Anulado el ${fechaHora(ap.anulado_en)}.`), ap.motivo_anulacion ? el("p.suave", { style: "margin-top:6px" }, `Motivo: ${ap.motivo_anulacion}`) : null,
             el("p.tenue", { style: "margin-top:6px;font-size:13px" }, "Las prendas volvieron al inventario.")) : null,
           el("div.panel",
-            el("div.panel-titulo", el("h2", "Enviar la factura")),
+            el("div.panel-titulo", el("h2", ap.pagado ? "Enviar el recibo" : "Enviar la factura")),
             el("div.pila.chica",
               el("a.btn.primario", { href: whatsapp(), target: "_blank", rel: "noopener" }, icono("chat"), ap.cliente_telefono ? `WhatsApp a ${telefonoBonito(ap.cliente_telefono)}` : "Enviar por WhatsApp"),
-              el("button.btn", { type: "button", onclick: copiarEnlace }, icono("enlace"), "Copiar enlace de la factura"),
-              el("button.btn", { type: "button", onclick: () => imprimirFactura(hoja, `Factura ${ap.numero} · ${ap.cliente_nombre}`) }, icono("imprimir"), "Imprimir o guardar PDF"))),
+              el("div.fila-botones.pareja",
+                el("button.btn", { type: "button", onclick: compartir }, icono("compartir"), "Compartir"),
+                el("button.btn", { type: "button", onclick: () => imprimirFactura(hoja, `Factura ${ap.numero} · ${ap.cliente_nombre}`) }, icono("imprimir"), "Guardar PDF")))),
           el("div.panel",
             el("div.panel-titulo", el("h2", "Cliente"), anulado ? null : el("button.btn.fantasma.chico", { type: "button", onclick: editarCliente }, icono("editar", "chico"), "Editar")),
             el("div.recibo",
@@ -369,13 +386,10 @@ async function vistaDetalle(_pagina, ctx, id) {
       }
     });
   }
-  async function copiarEnlace() {
-    try {
-      await navigator.clipboard.writeText(enlace);
-      avisar("Enlace copiado");
-    } catch {
-      prompt("Copie el enlace de la factura:", enlace);
-    }
+  async function compartir() {
+    const texto = textoWhatsApp({ tienda: estado.ajustes, apartado: ap, articulos: ap.articulos });
+    const r = await compartirFactura({ titulo: `${ap.pagado ? "Recibo" : "Factura"} ${ap.numero} · ${estado.ajustes?.nombre_tienda || "Myle Store"}`, texto, enlace });
+    if (r === "copiado") avisar("Enlace copiado; péguelo donde quiera enviarlo");
   }
 
   pintar();

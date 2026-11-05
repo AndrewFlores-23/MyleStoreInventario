@@ -57,6 +57,7 @@ const TRAZOS = {
   entrega: "M3 7h11v9H3zM14 10h4l3 3v3h-7M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
   ojo: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   corazon: "M12 19.5s-7-4.3-7-9.6A3.9 3.9 0 0 1 12 7.6a3.9 3.9 0 0 1 7 2.3c0 5.3-7 9.6-7 9.6z",
+  compartir: "M12 3.5v11M12 3.5 8.5 7M12 3.5 15.5 7M6 11v7.5a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5V11",
 };
 const SVG = "http://www.w3.org/2000/svg";
 export function icono(nombre, clase = "") {
@@ -214,22 +215,61 @@ export function mensajeError(e) {
 }
 
 // ---------- Ventanas ----------
+// En el celular la hoja sube desde abajo y se cierra deslizándola hacia abajo (desde el asa o la cabecera)
 export function abrirHoja({ titulo, cuerpo, pie, clase = "", alCerrar } = {}) {
   const d = el("dialog.hoja" + (clase ? "." + clase : ""));
-  const cerrar = () => d.open && d.close();
-  d.append(
-    el("div.hoja-cabeza",
-      el("h2", titulo),
-      el("button.btn.fantasma.btn-icono", { type: "button", "aria-label": "Cerrar", onclick: cerrar }, icono("x"))),
-    el("div.hoja-cuerpo", cuerpo),
-  );
+  let cerrando = false;
+  const cerrar = () => {
+    if (!d.open || cerrando) return;
+    cerrando = true;
+    d.classList.add("saliendo");
+    const fin = () => d.open && d.close();
+    d.addEventListener("animationend", fin, { once: true });
+    setTimeout(fin, 260);
+  };
+  const cabeza = el("div.hoja-cabeza",
+    el("span.hoja-asa", { "aria-hidden": "true" }),
+    titulo ? el("h2", titulo) : el("span"),
+    el("button.btn.fantasma.btn-icono", { type: "button", "aria-label": "Cerrar", onclick: cerrar }, icono("x")));
+  d.append(cabeza, el("div.hoja-cuerpo", cuerpo));
   if (pie) d.append(el("div.hoja-pie", pie));
   d.addEventListener("close", () => { d.remove(); alCerrar?.(); });
+  d.addEventListener("cancel", (ev) => { ev.preventDefault(); cerrar(); });
   d.addEventListener("mousedown", (ev) => { if (ev.target === d) d.dataset.fuera = "1"; });
   d.addEventListener("click", (ev) => { if (ev.target === d && d.dataset.fuera) cerrar(); delete d.dataset.fuera; });
+  // Deslizar hacia abajo desde la cabecera para cerrar
+  let y0 = null;
+  cabeza.addEventListener("touchstart", (ev) => { y0 = ev.touches[0].clientY; d.style.transition = "none"; }, { passive: true });
+  cabeza.addEventListener("touchmove", (ev) => {
+    if (y0 == null) return;
+    const dy = Math.max(0, ev.touches[0].clientY - y0);
+    d.style.transform = `translateY(${dy}px)`;
+  }, { passive: true });
+  cabeza.addEventListener("touchend", (ev) => {
+    if (y0 == null) return;
+    const dy = ev.changedTouches[0].clientY - y0;
+    y0 = null;
+    d.style.transition = "";
+    if (dy > 90) { d.style.transform = ""; cerrar(); } else d.style.transform = "";
+  });
   document.body.append(d);
   d.showModal();
   return { dialogo: d, cerrar };
+}
+
+// Hoja de acciones: lista de opciones grandes, una por renglón (el menú del botón «+»)
+export function hojaAcciones(titulo, opciones) {
+  let elegida = null;
+  const { cerrar } = abrirHoja({
+    titulo,
+    clase: "chica.acciones",
+    alCerrar: () => elegida?.alElegir(),
+    cuerpo: el("div.lista-acciones", opciones.map((o) => el("button.accion", { type: "button", onclick: () => { elegida = o; cerrar(); } },
+      el("span.accion-icono", icono(o.icono)),
+      el("span.accion-texto", el("strong", o.titulo), o.detalle ? el("small", o.detalle) : null),
+      icono("atras", "chico accion-flecha")))),
+  });
+  return cerrar;
 }
 
 export function confirmar(titulo, { detalle, si = "Sí, seguir", no = "Volver", peligro = false } = {}) {

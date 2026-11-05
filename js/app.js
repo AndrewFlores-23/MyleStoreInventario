@@ -1,7 +1,7 @@
 // Myle Store · entrada, marco de la app (menú lateral en compu, pestañas en el celular) y rutas
 import { iniciarDatos, datos, DEMO, recordando, ultimoCorreo } from "./datos.js";
 import { estado, cargarAjustes, cargarProductos, ponerPendientes } from "./estado.js";
-import { $, el, icono, adorno, subir, mensajeError, trabajando, avisar } from "./util.js";
+import { $, el, icono, adorno, subir, hojaAcciones, mensajeError, trabajando, avisar } from "./util.js";
 import { vistaInicio } from "./vistas/inicio.js";
 import { vistaInventario } from "./vistas/inventario.js";
 import { vistaIngresos } from "./vistas/ingresos.js";
@@ -152,7 +152,17 @@ function armarMarco() {
         el("nav.pestanas", SECCIONES.filter((s) => !s.soloLateral).map((s) => enlace(s, true)))),
       el("div.desplazable",
         DEMO ? el("div.aviso-demo", "Modo demo: los datos son de ejemplo y se guardan solo en este navegador.") : null,
-        el("main.pagina")))));
+        el("main.pagina")),
+      el("button.mas-flotante", { type: "button", "aria-label": "Registrar", onclick: menuRegistrar }, icono("mas")))));
+}
+
+// El botón «+» del celular: lo que se registra todo el día, desde cualquier pantalla
+function menuRegistrar() {
+  hojaAcciones("¿Qué desea registrar?", [
+    { icono: "ingreso", titulo: "Ingreso de mercadería", detalle: "Prenda nueva o reposición, con foto y serie", alElegir: () => { location.hash = "#/ingresos"; } },
+    { icono: "bolsa", titulo: "Nuevo apartado", detalle: "Arma el pedido y genera la factura", alElegir: () => { location.hash = "#/apartados/nuevo"; } },
+    { icono: "salida", titulo: "Salida", detalle: "Venta directa, dañado, devolución o ajuste", alElegir: () => { location.hash = "#/salidas"; } },
+  ]);
 }
 
 function enrutar() {

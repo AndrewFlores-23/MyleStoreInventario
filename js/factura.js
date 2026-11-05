@@ -110,6 +110,25 @@ export function textoWhatsApp({ tienda, apartado: ap, articulos, enlace }) {
   return partes.join("\n");
 }
 
+// Compartir con el menú del celular (WhatsApp, guardar, AirDrop…); en la compu copia el enlace
+export async function compartirFactura({ titulo, texto, enlace }) {
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: titulo, text: texto, url: enlace });
+      return "compartido";
+    } catch (e) {
+      if (e?.name === "AbortError") return "cancelado";
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(enlace);
+    return "copiado";
+  } catch {
+    prompt("Copie el enlace de la factura:", enlace);
+    return "mostrado";
+  }
+}
+
 export function enlaceFactura(token) {
   const u = new URL("factura.html", location.href);
   u.hash = "";
