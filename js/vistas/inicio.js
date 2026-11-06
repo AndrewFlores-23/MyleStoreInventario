@@ -1,7 +1,7 @@
 // Inicio: cómo está el inventario, qué falta por entregar o cobrar y lo último que se movió
 import { datos } from "../datos.js";
 import { estado, cargarProductos, ponerPendientes } from "../estado.js";
-import { el, icono, dinero, mismoMes, nombreMes, talla } from "../util.js";
+import { el, icono, dinero, mismoMes, esHoy, nombreMes, talla } from "../util.js";
 import { fotoProducto, sellosApartado, cajaDias, renglonMovimiento, unidades, vacio } from "../componentes.js";
 import { abrirFicha } from "./inventario.js";
 
@@ -10,12 +10,13 @@ const linea = (et, val, clase = "", detalle) =>
   el("div.linea", el("span.et", et), el("span.puntos"), el("span.val" + clase, val, detalle ? el("small", detalle) : null));
 
 export async function vistaInicio(_pagina, ctx) {
-  const [apartados, salidas, ultimos, compras, proveedores] = await Promise.all([
+  const [apartados, salidas, ultimos, compras, proveedores, ingresosMes] = await Promise.all([
     datos.apartados(),
     datos.movimientos({ tipo: "salida", limite: 500 }),
     datos.movimientos({ limite: 8 }),
     datos.compras({ limite: 100 }).catch(() => []),
     datos.proveedores().catch(() => []),
+    datos.ingresos({ limite: 500 }),
     cargarProductos(),
   ]);
   const productos = estado.productos;
@@ -29,6 +30,16 @@ export async function vistaInicio(_pagina, ctx) {
   const porCobrar = vivos.filter((a) => !a.pagado);
   const cobradoMes = suma(vivos.filter((a) => a.pagado && mismoMes(a.pagado_en)), (a) => Number(a.total));
   const ventasMes = suma(salidas.filter((m) => m.motivo === "venta" && mismoMes(m.creado_en)), (m) => m.cantidad * Number(m.precio_unitario || 0));
+
+  // Cómo vamos: lo vendido hoy y en el mes (apartados cobrados + ventas directas) y la ganancia de lo ingresado
+  const cobradoHoy = suma(vivos.filter((a) => a.pagado && esHoy(a.pagado_en)), (a) => Number(a.total));
+  const ventasHoy = suma(salidas.filter((m) => m.motivo === "venta" && esHoy(m.creado_en)), (m) => m.cantidad * Number(m.precio_unitario || 0));
+  const apartadosHoy = vivos.filter((a) => a.pagado && esHoy(a.pagado_en)).length + salidas.filter((m) => m.motivo === "venta" && esHoy(m.creado_en)).length;
+  const apartadosMes = vivos.filter((a) => a.pagado && mismoMes(a.pagado_en)).length + salidas.filter((m) => m.motivo === "venta" && mismoMes(m.creado_en)).length;
+  const delMes = ingresosMes.filter((i) => mismoMes(i.creado_en));
+  const invertidoMes = suma(delMes, (i) => i.cantidad * Number(i.costo_unitario));
+  const esperadoMes = suma(delMes, (i) => i.cantidad * Number(i.precio_venta));
+  const prendasMes = suma(delMes, (i) => i.cantidad);
   ponerPendientes(porEntregar.length);
 
   const agotandose = productos.filter((p) => p.activo && p.existencias <= 2).sort((a, b) => a.existencias - b.existencias).slice(0, 8);
@@ -71,10 +82,20 @@ export async function vistaInicio(_pagina, ctx) {
     el("span.paso-icono", icono(p.icono)),
     el("span.paso-texto", el("strong", p.titulo), el("small", p.detalle)))));
 
+  const cifra = (rotulo, valor, detalle, clase = "") => el("div.cifra" + clase, el("span.cifra-rotulo", rotulo), el("span.cifra-valor", valor), detalle ? el("span.cifra-detalle", detalle) : null);
+  const comoVamos = el("section.panel.como-vamos",
+    el("div.panel-titulo", el("h2", "Cómo vamos"), el("a", { href: "#/movimientos/salidas" }, "Ver ventas →")),
+    el("div.cifras",
+      cifra("Vendido hoy", dinero(cobradoHoy + ventasHoy), apartadosHoy ? `${apartadosHoy} venta${apartadosHoy === 1 ? "" : "s"}` : "Todavía nada hoy", cobradoHoy + ventasHoy > 0 ? ".listo" : ""),
+      cifra(`Vendido en ${mes}`, dinero(cobradoMes + ventasMes), `${apartadosMes} venta${apartadosMes === 1 ? "" : "s"} · ${dinero(cobradoMes)} apartados + ${dinero(ventasMes)} directas`),
+      cifra("Ganancia del inventario", dinero(valorVenta - valorCosto), `Si se vende todo lo que hay: ${dinero(valorVenta)} a la venta, costó ${dinero(valorCosto)}`, ".acento"),
+      cifra(`Ingresado en ${mes}`, dinero(esperadoMes - invertidoMes), prendasMes ? `Ganancia esperada de ${prendasMes} prendas: invertido ${dinero(invertidoMes)}, a la venta ${dinero(esperadoMes)}` : "Sin ingresos este mes")));
+
   ctx.pintar(
     el("div.cabeza",
       el("div", el("h1", "Resumen"), el("p", hoy.charAt(0).toUpperCase() + hoy.slice(1)))),
     recorrido,
+    comoVamos,
     el("div.atajos",
       el("a.btn.primario", { href: "#/movimientos/compras/nueva" }, icono("caja"), "Nueva compra"),
       el("a.btn", { href: "#/ingresos" }, icono("ingreso"), "Registrar prenda"),

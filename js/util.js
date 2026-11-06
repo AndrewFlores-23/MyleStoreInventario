@@ -58,6 +58,7 @@ const TRAZOS = {
   ojo: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   corazon: "M12 19.5s-7-4.3-7-9.6A3.9 3.9 0 0 1 12 7.6a3.9 3.9 0 0 1 7 2.3c0 5.3-7 9.6-7 9.6z",
   compartir: "M12 3.5v11M12 3.5 8.5 7M12 3.5 15.5 7M6 11v7.5a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5V11",
+  guia: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM10 8.5v7l5.5-3.5z",
 };
 const SVG = "http://www.w3.org/2000/svg";
 export function icono(nombre, clase = "") {
@@ -106,6 +107,7 @@ const diaCR = (d) => {
 };
 export const diasDesde = (d) => Math.max(0, Math.round((diaCR(Date.now()) - diaCR(d)) / 86400000));
 export const mismoMes = (d) => fNumerico.format(new Date(d)).slice(3) === fNumerico.format(new Date()).slice(3);
+export const esHoy = (d) => fNumerico.format(new Date(d)) === fNumerico.format(new Date());
 export const nombreMes = () => formato({ month: "long" }).format(new Date());
 export function hace(d) {
   const n = diasDesde(d);

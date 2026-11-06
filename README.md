@@ -4,6 +4,9 @@ Sistema de inventario para una tienda de ropa que vende en línea desde casa. Fu
 
 - **Ingresos:** cada entrada de mercadería lleva foto, cantidad, precio de costo y precio de venta final, y recibe un **número de serie único** (`MS-00001`). Sirve para un producto nuevo o para reponer uno que ya existe. Con «Otra talla o color» se registra la misma prenda en otra talla sin volver a escribir todo.
 - **Inventario:** las prendas con su foto, talla, color, precio y cuántas quedan disponibles. La ficha de cada una muestra su ganancia, las etiquetas de serie de cada ingreso (se vuelven a ver e imprimir las veces que haga falta) y todo su historial.
+- **Cómo vamos (Inicio):** vendido hoy y en el mes (apartados cobrados + ventas directas), ganancia estimada de lo que hay en inventario y ganancia esperada de lo ingresado en el mes.
+- **Guía:** en *Ajustes → Cómo usar el sistema* hay un recorrido animado de dos minutos (`guia.html`) con datos de ejemplo que explica cada parte; se reproduce solo, se pausa y se salta por escenas.
+- **Desde cualquier dispositivo:** todo se guarda en Supabase; en el dispositivo solo queda la sesión y el tema. Con el correo y la contraseña, los mismos datos aparecen en cualquier celular o computadora.
 - **Inicio:** arriba va el recorrido de la tienda en cinco pasos (proveedores → compras → inventario → apartados → entregas), cada uno con lo que falta y un enlace a su pantalla.
 - **Salidas:** venta directa, prenda dañada, devolución al proveedor, regalo o ajuste de conteo.
 - **Proveedores:** se registran en *Ajustes* (nombre, teléfono, correo, dirección y nota) o desde una compra nueva con «Nuevo»; al crear la compra se elige uno de la lista.
@@ -57,6 +60,7 @@ Al ser archivos estáticos, se puede publicar en GitHub Pages (*Settings → Pag
 
 ```
 index.html            app (inventario, ingresos, salidas, apartados, ajustes)
+guia.html             guía animada de uso con datos de ejemplo (js/guia.js, css/guia.css)
 factura.html          factura pública que abre el cliente
 css/app.css           estilos (tema de la marca y tema oscuro)
 img/                  logo sin fondo, mariposa, foto de perfil, íconos y portada de la entrada

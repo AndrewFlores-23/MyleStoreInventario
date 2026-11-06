@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es" data-theme="claro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cómo usar Myle Store</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#fcf1ee">
+  <link rel="icon" href="img/icono.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&display=swap">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/guia.css">
+</head>
+<body class="guia">
+  <main class="guia-marco">
+    <header class="guia-cabeza">
+      <a class="volver" href="./#/ajustes" id="volver"><svg class="ico chico" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>Volver a la app</a>
+      <img class="guia-logo" src="img/logo.webp" alt="Myle Store · Moda & Beauty" width="640" height="527">
+      <h1>Cómo usar el sistema</h1>
+      <p class="guia-intro">Un recorrido de dos minutos con datos de ejemplo. Toque una escena para ir directo a ella.</p>
+    </header>
+
+    <section class="escenario" aria-live="polite">
+      <div class="telefono" id="telefono">
+        <div class="pantalla" id="pantalla"></div>
+      </div>
+      <div class="subtitulo" id="subtitulo"></div>
+    </section>
+
+    <nav class="controles" aria-label="Controles de la guía">
+      <button class="btn btn-icono" id="anterior" type="button" aria-label="Escena anterior"><svg class="ico" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <button class="btn primario" id="pausa" type="button"><svg class="ico" viewBox="0 0 24 24"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg><span>Pausar</span></button>
+      <button class="btn btn-icono" id="siguiente" type="button" aria-label="Escena siguiente"><svg class="ico" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    </nav>
+    <ol class="escenas" id="escenas"></ol>
+
+    <section class="glosario">
+      <h2>Qué es cada cosa</h2>
+      <dl>
+        <div><dt>Proveedores</dt><dd>A quién le compra la tienda. Se registran en Ajustes o al crear una compra.</dd></div>
+        <div><dt>Compras</dt><dd>Cada pedido al proveedor: cuántas prendas y cuánto se pagó. Desde la compra se registra prenda por prenda hasta completarla.</dd></div>
+        <div><dt>Ingreso y serie</dt><dd>Cada prenda entra con foto, cantidad, costo y precio de venta, y recibe su etiqueta <b>MS-00001</b>. La etiqueta se puede volver a ver e imprimir desde la ficha.</dd></div>
+        <div><dt>Inventario</dt><dd>Lo que hay para vender: foto, talla, color, precio y cuántas quedan. Avisa en amarillo cuando quedan pocas.</dd></div>
+        <div><dt>Apartados</dt><dd>El pedido de un cliente que todavía no se entrega. Al crearlo, las prendas se restan del inventario y sale la factura con los datos de depósito.</dd></div>
+        <div><dt>Pagado y entregado</dt><dd>Cuando el cliente paga se marca <b>Cancelado</b>; cuando recibe, <b>Entregado</b>. Si no sigue, <b>Anular</b> devuelve las prendas.</dd></div>
+        <div><dt>Salidas</dt><dd>Lo que sale sin apartado: venta directa, dañado, devolución al proveedor, regalo o ajuste de conteo.</dd></div>
+        <div><dt>Movimientos</dt><dd>El registro completo: compras, salidas y todo lo que entró y salió, por mes y por producto.</dd></div>
+        <div><dt>Desde cualquier dispositivo</dt><dd>Todo se guarda en la nube. Con el correo y la contraseña de la tienda, los mismos datos aparecen en cualquier celular o computadora.</dd></div>
+      </dl>
+    </section>
+  </main>
+  <script type="module" src="js/guia.js"></script>
+</body>
+</html>
