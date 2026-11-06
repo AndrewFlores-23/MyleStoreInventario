@@ -75,13 +75,38 @@ function ingresar(db, d, cuando = ahora()) {
       foto_path: d.fotoPath || p.foto_path, activo: true, actualizado_en: cuando,
     });
   }
+  const compra = d.compraId ? (db.compras || []).find((c) => c.id === d.compraId) || falla("La compra no existe") : null;
   const ing = {
     id: uuid(), serie: "MS-" + pad(siguiente(db, "ingreso"), 5), producto_id: p.id, cantidad,
     costo_unitario: Number(d.costo), precio_venta: Number(d.precio), nota: limpio(d.nota), creado_en: cuando, creado_por: EMAIL,
+    compra_id: compra ? compra.id : null,
   };
   db.ingresos.push(ing);
+  if (compra) { compra.total += cantidad * Number(d.costo); compra.unidades += cantidad; }
   mover(db, { producto_id: p.id, tipo: "entrada", motivo: "ingreso", cantidad, existencias_despues: p.existencias, precio_unitario: ing.costo_unitario, referencia: ing.serie, ingreso_id: ing.id, nota: ing.nota }, cuando);
   return ing;
+}
+
+function nuevoProveedor(db, d, cuando = ahora()) {
+  if (!limpio(d.nombre)) falla("Escriba el nombre del proveedor");
+  if ((db.proveedores || []).some((p) => p.nombre.toLowerCase() === d.nombre.trim().toLowerCase())) falla("Ya hay un proveedor con ese nombre");
+  const p = { id: uuid(), nombre: d.nombre.trim(), telefono: limpio(d.telefono), correo: limpio(d.correo), direccion: limpio(d.direccion), nota: limpio(d.nota), activo: true, creado_en: cuando, actualizado_en: cuando };
+  (db.proveedores ||= []).push(p);
+  return p;
+}
+
+function abrirCompra(db, d, cuando = ahora()) {
+  if (Number(d.prendasPedidas || 0) < 0) falla("Revise la cantidad de prendas");
+  if (Number(d.montoPagado || 0) < 0) falla("Revise el monto pagado");
+  let nombre = limpio(d.proveedor);
+  if (d.proveedorId) nombre = ((db.proveedores || []).find((p) => p.id === d.proveedorId) || falla("El proveedor no existe")).nombre;
+  const c = {
+    id: uuid(), numero: "CO-" + pad(siguiente(db, "compra"), 4), proveedor: nombre, proveedor_id: d.proveedorId || null, factura: limpio(d.factura),
+    nota: limpio(d.nota), total: 0, unidades: 0, prendas_pedidas: Number(d.prendasPedidas || 0), monto_pagado: Number(d.montoPagado || 0),
+    fecha_compra: d.fechaCompra || cuando.slice(0, 10), creado_en: cuando, creado_por: EMAIL,
+  };
+  (db.compras ||= []).push(c);
+  return c;
 }
 
 function sacar(db, d, cuando = ahora()) {
@@ -171,7 +196,7 @@ function anular(db, id, motivo, cuando = ahora()) {
 // ---------- Datos de ejemplo ----------
 function sembrar() {
   const db = {
-    seq: {}, productos: [], ingresos: [], apartados: [], articulos: [], movimientos: [],
+    seq: {}, productos: [], ingresos: [], apartados: [], articulos: [], movimientos: [], compras: [], proveedores: [],
     ajustes: {
       id: 1, nombre_tienda: "Myle Store", whatsapp: "8000-0000", instagram: "", sinpe_movil: "8000-0000",
       sinpe_a_nombre: "Nombre de la dueña", banco: "Banco de ejemplo", cuenta_iban: "CR00 0000 0000 0000 0000 00",
@@ -185,10 +210,14 @@ function sembrar() {
     return d.toISOString();
   };
   const ingreso = (d, n) => ingresar(db, d, dia(n, 9));
-  const blusaM = ingreso({ nombre: "Blusa de lino manga corta", categoria: "Blusas", talla: "M", color: "Blanco", cantidad: 4, costo: 6500, precio: 14900, nota: "Proveedor San José" }, 21);
-  const blusaS = ingreso({ nombre: "Blusa de lino manga corta", categoria: "Blusas", talla: "S", color: "Blanco", cantidad: 3, costo: 6500, precio: 14900 }, 21);
-  const vestido = ingreso({ nombre: "Vestido midi floral", categoria: "Vestidos", talla: "M", color: "Estampado", cantidad: 3, costo: 11000, precio: 24900 }, 19);
-  const jeans = ingreso({ nombre: "Jeans tiro alto", categoria: "Jeans", talla: "10", color: "Mezclilla", cantidad: 5, costo: 9500, precio: 19900 }, 18);
+  const prov1 = nuevoProveedor(db, { nombre: "Mayorista San José", telefono: "2222-0000", direccion: "San José centro, avenida 4" }, dia(30));
+  const prov2 = nuevoProveedor(db, { nombre: "Importadora Luna", telefono: "8800-5566", correo: "ventas@importadoraluna.cr", nota: "Pide por catálogo de WhatsApp; entrega en 5 días" }, dia(28));
+  const compra1 = abrirCompra(db, { proveedorId: prov1.id, factura: "F-20451", prendasPedidas: 7, montoPagado: 45500 }, dia(21, 9));
+  const blusaM = ingreso({ nombre: "Blusa de lino manga corta", categoria: "Blusas", talla: "M", color: "Blanco", cantidad: 4, costo: 6500, precio: 14900, compraId: compra1.id }, 21);
+  const blusaS = ingreso({ nombre: "Blusa de lino manga corta", categoria: "Blusas", talla: "S", color: "Blanco", cantidad: 3, costo: 6500, precio: 14900, compraId: compra1.id }, 21);
+  const compra2 = abrirCompra(db, { proveedorId: prov2.id, factura: "A-0088", nota: "Pedido por catálogo", prendasPedidas: 10, montoPagado: 98000 }, dia(19, 9));
+  const vestido = ingreso({ nombre: "Vestido midi floral", categoria: "Vestidos", talla: "M", color: "Estampado", cantidad: 3, costo: 11000, precio: 24900, compraId: compra2.id }, 19);
+  const jeans = ingreso({ nombre: "Jeans tiro alto", categoria: "Jeans", talla: "10", color: "Mezclilla", cantidad: 5, costo: 9500, precio: 19900, compraId: compra2.id }, 19);
   const top = ingreso({ nombre: "Top de tirantes", categoria: "Tops", talla: "Única", color: "Negro", cantidad: 6, costo: 3000, precio: 7900 }, 16);
   const enagua = ingreso({ nombre: "Enagua plisada", categoria: "Enaguas", talla: "S", color: "Beige", cantidad: 2, costo: 7000, precio: 16500 }, 14);
   const conjunto = ingreso({ nombre: "Conjunto deportivo", categoria: "Ropa deportiva", talla: "M", color: "Gris", cantidad: 2, costo: 10000, precio: 22000 }, 12);
@@ -260,6 +289,28 @@ export const datosDemo = {
   },
 
   registrarIngreso: (d) => cambiar((db) => ingresar(db, d)),
+  crearCompra: (d) => cambiar((db) => abrirCompra(db, d)),
+  proveedores: () => consultar((db) => (db.proveedores || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))),
+  crearProveedor: (d) => cambiar((db) => nuevoProveedor(db, d)),
+  editarProveedor: (id, cambios) => cambiar((db) => {
+    const p = (db.proveedores || []).find((x) => x.id === id) || falla("El proveedor no existe");
+    if (cambios.nombre !== undefined && !limpio(cambios.nombre)) falla("Escriba el nombre del proveedor");
+    return Object.assign(p, cambios, { actualizado_en: ahora() });
+  }),
+  compras: ({ limite = 300 } = {}) => consultar((db) => (db.compras || []).slice().sort((a, b) => b.creado_en.localeCompare(a.creado_en)).slice(0, limite)
+    .map((c) => ({ ...c, ingresos: db.ingresos.filter((i) => i.compra_id === c.id).map((i) => ({ ...i, producto: producto(db, i.producto_id) })) }))),
+  compra: (id) => consultar((db) => {
+    const c = (db.compras || []).find((x) => x.id === id);
+    return c ? { ...c, ingresos: db.ingresos.filter((i) => i.compra_id === c.id).map((i) => ({ ...i, producto: producto(db, i.producto_id) })) } : null;
+  }),
+  editarCompra: (id, cambios) => cambiar((db) => {
+    const c = (db.compras || []).find((x) => x.id === id) || falla("La compra no existe");
+    const nuevo = { proveedor: limpio(cambios.proveedor), factura: limpio(cambios.factura), nota: limpio(cambios.nota) };
+    if (cambios.prendas_pedidas !== undefined) nuevo.prendas_pedidas = Number(cambios.prendas_pedidas);
+    if (cambios.monto_pagado !== undefined) nuevo.monto_pagado = Number(cambios.monto_pagado);
+    if (cambios.fecha_compra) nuevo.fecha_compra = cambios.fecha_compra;
+    return Object.assign(c, nuevo);
+  }),
   ingresos: ({ productoId, limite = 200 } = {}) => consultar((db) => db.ingresos
     .filter((i) => !productoId || i.producto_id === productoId)
     .sort((a, b) => b.creado_en.localeCompare(a.creado_en))

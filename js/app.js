@@ -7,6 +7,7 @@ import { vistaInventario } from "./vistas/inventario.js";
 import { vistaIngresos } from "./vistas/ingresos.js";
 import { vistaSalidas } from "./vistas/salidas.js";
 import { vistaApartados } from "./vistas/apartados.js";
+import { vistaMovimientos } from "./vistas/movimientos.js";
 import { vistaAjustes } from "./vistas/ajustes.js";
 
 // El tipo de enlace (recuperar contraseña) se lee antes de que Supabase limpie la dirección
@@ -14,13 +15,15 @@ const hashInicial = new URLSearchParams(location.hash.slice(1));
 const tipoEnlace = hashInicial.get("type");
 const errorEnlace = hashInicial.get("error_description");
 
+// soloLateral: va en el menú de la compu; en el celular, Ingresos y Salidas se abren desde el botón «+»
 const SECCIONES = [
   { ruta: "inicio", titulo: "Inicio", icono: "inicio", vista: vistaInicio },
   { ruta: "inventario", titulo: "Inventario", icono: "percha", vista: vistaInventario },
-  { ruta: "ingresos", titulo: "Ingresos", icono: "ingreso", vista: vistaIngresos },
-  { ruta: "salidas", titulo: "Salidas", icono: "salida", vista: vistaSalidas },
+  { ruta: "ingresos", titulo: "Ingresos", icono: "ingreso", vista: vistaIngresos, soloLateral: true },
+  { ruta: "salidas", titulo: "Salidas", icono: "salida", vista: vistaSalidas, soloLateral: true },
+  { ruta: "movimientos", titulo: "Movimientos", icono: "caja", vista: vistaMovimientos },
   { ruta: "apartados", titulo: "Apartados", icono: "bolsa", vista: vistaApartados },
-  { ruta: "ajustes", titulo: "Ajustes", icono: "ajustes", vista: vistaAjustes, soloLateral: true },
+  { ruta: "ajustes", titulo: "Ajustes", icono: "ajustes", vista: vistaAjustes, soloLateralYMovil: true },
 ];
 
 const app = $("#app");
@@ -149,7 +152,7 @@ function armarMarco() {
       el("header.barra-movil",
         el("div.fila-marca", marca(),
           el("a.btn.fantasma.btn-icono", { href: "#/ajustes", "aria-label": "Ajustes", "data-ruta": "ajustes" }, icono("ajustes"))),
-        el("nav.pestanas", SECCIONES.filter((s) => !s.soloLateral).map((s) => enlace(s, true)))),
+        el("nav.pestanas", SECCIONES.filter((s) => !s.soloLateral && !s.soloLateralYMovil).map((s) => enlace(s, true)))),
       el("div.desplazable",
         DEMO ? el("div.aviso-demo", "Modo demo: los datos son de ejemplo y se guardan solo en este navegador.") : null,
         el("main.pagina")),
@@ -159,7 +162,8 @@ function armarMarco() {
 // El botón «+» del celular: lo que se registra todo el día, desde cualquier pantalla
 function menuRegistrar() {
   hojaAcciones("¿Qué desea registrar?", [
-    { icono: "ingreso", titulo: "Ingreso de mercadería", detalle: "Prenda nueva o reposición, con foto y serie", alElegir: () => { location.hash = "#/ingresos"; } },
+    { icono: "caja", titulo: "Compra de mercadería", detalle: "El pedido al proveedor: cuántas prendas y cuánto pagó", alElegir: () => { location.hash = "#/movimientos/compras/nueva"; } },
+    { icono: "ingreso", titulo: "Ingreso de prenda", detalle: "Prenda nueva o reposición, con foto y serie", alElegir: () => { location.hash = "#/ingresos"; } },
     { icono: "bolsa", titulo: "Nuevo apartado", detalle: "Arma el pedido y genera la factura", alElegir: () => { location.hash = "#/apartados/nuevo"; } },
     { icono: "salida", titulo: "Salida", detalle: "Venta directa, dañado, devolución o ajuste", alElegir: () => { location.hash = "#/salidas"; } },
   ]);
@@ -174,8 +178,10 @@ function enrutar() {
     return;
   }
   document.querySelectorAll("dialog[open]").forEach((d) => d.close());
+  const rutaPestana = ["ingresos", "salidas"].includes(seccion.ruta) ? "movimientos" : seccion.ruta;
   document.querySelectorAll("[data-ruta]").forEach((a) => {
-    if (a.dataset.ruta === seccion.ruta) a.setAttribute("aria-current", "page");
+    const enPestanas = a.closest(".pestanas");
+    if (a.dataset.ruta === (enPestanas ? rutaPestana : seccion.ruta)) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
   document.title = `${seccion.titulo} · ${estado.ajustes?.nombre_tienda || "Myle Store"}`;

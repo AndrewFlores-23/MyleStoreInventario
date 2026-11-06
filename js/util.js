@@ -96,7 +96,9 @@ const fDiaCorto = formato({ day: "numeric", month: "short" });
 const fHora = formato({ hour: "numeric", minute: "2-digit" });
 const fNumerico = formato({ day: "2-digit", month: "2-digit", year: "numeric" });
 const sinPunto = (t) => t.replace(/\./g, "");
-export const fecha = (d) => (d ? sinPunto(fDia.format(new Date(d))) : "");
+// Una fecha sin hora («2026-11-05») se toma como día de Costa Rica, no como medianoche UTC
+const aFecha = (d) => (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + "T12:00:00-06:00") : new Date(d));
+export const fecha = (d) => (d ? sinPunto(fDia.format(aFecha(d))) : "");
 export const fechaHora = (d) => (d ? `${sinPunto(fDiaCorto.format(new Date(d)))} · ${fHora.format(new Date(d))}` : "");
 const diaCR = (d) => {
   const [dd, mm, aa] = fNumerico.format(new Date(d)).split("/").map(Number);

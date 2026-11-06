@@ -1,7 +1,7 @@
 // Piezas que se repiten en varias vistas: foto de la prenda, buscador de productos, sellos y renglones del historial
 import { datos } from "./datos.js";
 import { estado } from "./estado.js";
-import { el, icono, talla, tela, colorTela, dinero, fechaHora, diasDesde, sinTildes } from "./util.js";
+import { el, icono, talla, tela, colorTela, dinero, fecha, fechaHora, diasDesde, sinTildes, abrirHoja } from "./util.js";
 
 export const MOTIVOS = {
   ingreso: "Ingreso",
@@ -138,6 +138,35 @@ export function renglonMovimiento(m, { alAbrir, mostrarProducto = true } = {}) {
     el("small", `quedan ${m.existencias_despues}`));
   const props = alAbrir ? { type: "button", onclick: () => alAbrir(m) } : {};
   return el(alAbrir ? "button.renglon" : "div.renglon", props, mostrarProducto ? fotoProducto(p) : null, el("div.renglon-cuerpo", cuerpo), fin);
+}
+
+// Etiqueta del número de serie de un ingreso (marbete), la misma que sale al registrar y se puede volver a ver e imprimir
+export function marbete(ingreso, p) {
+  return el("div.marbete",
+    el("img.logo", { src: "img/logo-chico.webp", alt: estado.ajustes?.nombre_tienda || "Myle Store" }),
+    el("div.nombre", p?.nombre || ingreso.producto?.nombre || "Producto"),
+    el("div.detalles", talla(p?.talla ?? ingreso.producto?.talla), tela(p?.color ?? ingreso.producto?.color)),
+    el("div.precio", dinero(ingreso.precio_venta)),
+    el("div.codigo", el("small", "Serie de ingreso"), ingreso.serie),
+    el("div.cantidad", `${ingreso.cantidad} ${ingreso.cantidad === 1 ? "unidad" : "unidades"} · ${fecha(ingreso.creado_en)}`));
+}
+
+// Imprime solo la etiqueta (sirve para pegarla en la bolsa o la percha)
+export async function imprimirEtiqueta(nodo, titulo) {
+  const { imprimirFactura } = await import("./factura.js");
+  const hoja = el("div.hoja-etiqueta", nodo.cloneNode(true));
+  await imprimirFactura(hoja, titulo);
+}
+
+// Hoja con la etiqueta de una serie, para verla las veces que haga falta
+export function verEtiqueta(ingreso, p) {
+  const etiqueta = marbete(ingreso, p);
+  abrirHoja({
+    titulo: `Etiqueta ${ingreso.serie}`,
+    clase: "chica",
+    cuerpo: el("div", etiqueta, el("p.tenue", { style: "text-align:center;margin-top:16px;font-size:13px" }, "Puede imprimirla para pegarla en la bolsa o la percha.")),
+    pie: [el("button.btn.primario", { type: "button", onclick: () => imprimirEtiqueta(etiqueta, `Etiqueta ${ingreso.serie}`) }, icono("imprimir"), "Imprimir etiqueta")],
+  });
 }
 
 export function vacio(iconoNombre, titulo, detalle, accion) {

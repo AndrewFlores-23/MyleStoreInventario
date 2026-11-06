@@ -3,7 +3,7 @@ import { datos } from "../datos.js";
 import { estado, cargarProductos, ir } from "../estado.js";
 import { el, icono, dinero, talla, tela, sinTildes, abrirHoja, avisar, mensajeError, trabajando, comprimirFoto, campoDinero, numero, confirmar,
   CATEGORIAS_COMUNES, COLORES_COMUNES } from "../util.js";
-import { fotoProducto, renglonMovimiento, botonesFoto, vacio } from "../componentes.js";
+import { fotoProducto, renglonMovimiento, botonesFoto, verEtiqueta, vacio } from "../componentes.js";
 
 const filtro = { texto: "", categoria: "", agotados: true, ocultos: false };
 
@@ -93,6 +93,7 @@ export async function abrirFicha(id, { alCambiar } = {}) {
   const cuerpo = el("div");
   const { cerrar } = abrirHoja({ titulo: "Producto", clase: "ancha", cuerpo });
   let movimientos = null;
+  let ingresos = null;
   let editando = false;
 
   const refrescar = async () => {
@@ -146,13 +147,18 @@ export async function abrirFicha(id, { alCambiar } = {}) {
           : null,
         !p.activo ? el("button.btn.fantasma", { type: "button", onclick: mostrar }, icono("ojo"), "Volver a mostrar") : null));
 
+    const etiquetas = el("section.ficha-historial",
+      el("div.panel-titulo", el("h2", "Etiquetas de serie"), el("span.tenue", { style: "font-size:13px" }, "Toque una para verla o imprimirla")),
+      ingresos == null ? el("div.cargando", "Cargando…")
+        : ingresos.length ? el("div.chips", ingresos.map((i) => el("button.chip.chip-serie", { type: "button", onclick: () => verEtiqueta(i, p) }, icono("imprimir", "chico"), i.serie, el("small", `${i.cantidad} ud · ${dinero(i.precio_venta)}`))))
+          : vacio("ingreso", "Sin ingresos todavía."));
     const historial = el("section.ficha-historial",
-      el("div.panel-titulo", el("h2", "Historial"), el("span.tenue", { style: "font-size:13px" }, "Entradas con su serie y salidas")),
+      el("div.panel-titulo", el("h2", "Historial"), el("span.tenue", { style: "font-size:13px" }, "Todo lo que entró y salió de esta prenda")),
       movimientos == null ? el("div.cargando", "Cargando…")
         : movimientos.length ? el("div.lista", movimientos.map((m) => renglonMovimiento(m, { mostrarProducto: false })))
           : vacio("caja", "Sin movimientos."));
 
-    cuerpo.replaceChildren(el("div.ficha", el("div.columna-foto", foto, botonesFoto(cambiarFoto, { chico: true })), info), historial);
+    cuerpo.replaceChildren(el("div.ficha", el("div.columna-foto", foto, botonesFoto(cambiarFoto, { chico: true })), info), etiquetas, historial);
   };
 
   const formularioEdicion = () => {
@@ -221,9 +227,10 @@ export async function abrirFicha(id, { alCambiar } = {}) {
 
   pintar();
   try {
-    movimientos = await datos.movimientos({ productoId: id, limite: 100 });
+    [movimientos, ingresos] = await Promise.all([datos.movimientos({ productoId: id, limite: 100 }), datos.ingresos({ productoId: id, limite: 50 })]);
   } catch (e) {
-    movimientos = [];
+    movimientos = movimientos || [];
+    ingresos = ingresos || [];
     avisar(mensajeError(e), "error");
   }
   pintar();

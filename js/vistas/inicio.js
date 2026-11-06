@@ -10,10 +10,12 @@ const linea = (et, val, clase = "", detalle) =>
   el("div.linea", el("span.et", et), el("span.puntos"), el("span.val" + clase, val, detalle ? el("small", detalle) : null));
 
 export async function vistaInicio(_pagina, ctx) {
-  const [apartados, salidas, ultimos] = await Promise.all([
+  const [apartados, salidas, ultimos, compras, proveedores] = await Promise.all([
     datos.apartados(),
     datos.movimientos({ tipo: "salida", limite: 500 }),
     datos.movimientos({ limite: 8 }),
+    datos.compras({ limite: 100 }).catch(() => []),
+    datos.proveedores().catch(() => []),
     cargarProductos(),
   ]);
   const productos = estado.productos;
@@ -33,13 +35,51 @@ export async function vistaInicio(_pagina, ctx) {
   const mes = nombreMes();
   const hoy = new Intl.DateTimeFormat("es-CR", { weekday: "long", day: "numeric", month: "long", timeZone: "America/Costa_Rica" }).format(new Date());
 
+  // El recorrido de la tienda, de la compra a la entrega: cada paso dice qué sigue y lleva a su pantalla
+  const comprasPendientes = compras.filter((c) => (c.prendas_pedidas || 0) > (c.unidades || 0));
+  const pasos = [
+    {
+      icono: "caja", titulo: "Proveedores", href: "#/ajustes",
+      hecho: proveedores.length > 0,
+      detalle: proveedores.length ? `${proveedores.length} registrado${proveedores.length === 1 ? "" : "s"}` : "Registre a quién le compra",
+    },
+    {
+      icono: "caja", titulo: "Compras", href: comprasPendientes.length ? `#/movimientos/compras/${comprasPendientes[0].id}` : "#/movimientos/compras/nueva",
+      hecho: compras.length > 0 && !comprasPendientes.length,
+      aviso: comprasPendientes.length > 0,
+      detalle: comprasPendientes.length ? `${comprasPendientes.length} por terminar de registrar` : compras.length ? `${compras.length} registrada${compras.length === 1 ? "" : "s"}` : "Anote el pedido al proveedor",
+    },
+    {
+      icono: "percha", titulo: "Inventario", href: "#/inventario",
+      hecho: unidadesDisponibles > 0,
+      detalle: unidadesDisponibles ? `${unidadesDisponibles} prendas disponibles` : "Registre las prendas con su foto",
+    },
+    {
+      icono: "bolsa", titulo: "Apartados", href: porEntregar.length ? "#/apartados" : "#/apartados/nuevo",
+      hecho: porEntregar.length === 0 && apartados.length > 0,
+      aviso: porEntregar.length > 0,
+      detalle: porEntregar.length ? `${porEntregar.length} por entregar` : "Arme el pedido y envíe la factura",
+    },
+    {
+      icono: "entrega", titulo: "Entregas y salidas", href: porEntregar.length ? `#/apartados/${porEntregar[0].id}` : "#/salidas",
+      hecho: apartados.some((a) => a.estado === "entregado"),
+      detalle: porCobrar.length ? `${porCobrar.length} por cobrar` : "Marque pagado y entregado",
+    },
+  ];
+  const recorrido = el("div.recorrido", pasos.map((p, i) => el("a.paso" + (p.hecho ? ".hecho" : "") + (p.aviso ? ".aviso" : ""), { href: p.href },
+    el("span.paso-num", p.hecho && !p.aviso ? icono("check", "chico") : String(i + 1)),
+    el("span.paso-icono", icono(p.icono)),
+    el("span.paso-texto", el("strong", p.titulo), el("small", p.detalle)))));
+
   ctx.pintar(
     el("div.cabeza",
       el("div", el("h1", "Resumen"), el("p", hoy.charAt(0).toUpperCase() + hoy.slice(1)))),
+    recorrido,
     el("div.atajos",
-      el("a.btn.primario", { href: "#/ingresos" }, icono("ingreso"), "Nuevo ingreso"),
+      el("a.btn.primario", { href: "#/movimientos/compras/nueva" }, icono("caja"), "Nueva compra"),
+      el("a.btn", { href: "#/ingresos" }, icono("ingreso"), "Registrar prenda"),
       el("a.btn", { href: "#/apartados/nuevo" }, icono("bolsa"), "Nuevo apartado"),
-      el("a.btn", { href: "#/salidas" }, icono("salida"), "Registrar salida")),
+      el("a.btn", { href: "#/salidas" }, icono("salida"), "Salida")),
     el("div.resumen-cifras",
       el("section.panel",
         el("div.panel-titulo", el("h2", "Inventario"), el("a", { href: "#/inventario" }, "Ver todo →")),

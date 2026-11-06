@@ -4,14 +4,16 @@ import { datos } from "../datos.js";
 import { estado, cargarProductos } from "../estado.js";
 import { el, icono, dinero, numero, fecha, talla, tela, colorTela, comprimirFoto, campoDinero, contador, trabajando, avisar, mensajeError,
   abrirHoja, confirmar, subir, TALLAS_COMUNES, COLORES_COMUNES, CATEGORIAS_COMUNES } from "../util.js";
-import { fotoProducto, selectorProducto, productoElegido, botonesFoto, vacio } from "../componentes.js";
+import { fotoProducto, selectorProducto, productoElegido, botonesFoto, marbete, imprimirEtiqueta, vacio } from "../componentes.js";
 import { abrirFicha } from "./inventario.js";
 
 export async function vistaIngresos(_pagina, ctx) {
-  const [historial] = await Promise.all([datos.ingresos({ limite: 100 }), cargarProductos()]);
+  // Si se llega desde una compra (#/ingresos?compra=…), cada prenda queda ligada a ella
+  const compraId = ctx.consulta.get("compra");
+  const [historial, compraInicial] = await Promise.all([datos.ingresos({ limite: 100 }), compraId ? datos.compra(compraId).catch(() => null) : null, cargarProductos()]);
 
   // ---------- Estado del formulario ----------
-  const f = { modo: "nuevo", producto: null, foto: null, fotoUrl: null, fotoRuta: null };
+  const f = { modo: "nuevo", producto: null, foto: null, fotoUrl: null, fotoRuta: null, compra: compraInicial };
   const preProducto = estado.productos.find((p) => p.id === ctx.consulta.get("producto"));
   if (preProducto) Object.assign(f, { modo: "existente", producto: preProducto });
 
@@ -24,7 +26,23 @@ export async function vistaIngresos(_pagina, ctx) {
   const cantidad = contador({ valor: 1, min: 1, max: 9999, alCambiar: () => calcular() });
   const costo = campoDinero({ required: true, oninput: () => calcular() });
   const precio = campoDinero({ required: true, oninput: () => calcular() });
-  const nota = el("input", { placeholder: "Proveedor, factura de compra u otra observación" });
+  const nota = el("input", { placeholder: "Ej.: viene con etiqueta, talla grande" });
+  // Compra en curso: se muestra el avance y las prendas van quedando ligadas a ella
+  const resumenCompra = el("div.compra-abierta.oculto");
+  function pintarCompra() {
+    const c = f.compra;
+    resumenCompra.classList.toggle("oculto", !c);
+    if (!c) return;
+    const faltan = Math.max(0, (c.prendas_pedidas || 0) - (c.unidades || 0));
+    resumenCompra.replaceChildren(
+      icono("caja", "chico"),
+      el("div.renglon-cuerpo",
+        el("strong", `Compra ${c.numero}${c.proveedor ? ` · ${c.proveedor}` : ""}`),
+        el("span", c.prendas_pedidas
+          ? (faltan > 0 ? `${c.unidades} de ${c.prendas_pedidas} prendas registradas · faltan ${faltan}` : `Las ${c.prendas_pedidas} prendas ya están registradas`)
+          : `${c.unidades} ${c.unidades === 1 ? "prenda registrada" : "prendas registradas"}`)),
+      el("a.btn.fantasma.chico", { href: `#/movimientos/compras/${c.id}` }, "Ver compra"));
+  }
   const ganancia = el("div.ganancia");
   const boton = el("button.btn.primario.grande", { type: "submit" }, icono("check"), "Registrar ingreso");
   const costoIn = costo.querySelector("input");
@@ -146,9 +164,14 @@ export async function vistaIngresos(_pagina, ctx) {
             productoId: f.modo === "existente" ? f.producto.id : null,
             nombre: nombre.value, categoria: categoria.value, talla: tallaIn.value, color: color.value,
             fotoPath: f.fotoRuta,
-            cantidad: cantidad.leer(), costo: c, precio: v, nota: nota.value,
+            cantidad: cantidad.leer(), costo: c, precio: v, nota: nota.value, compraId: f.compra?.id || null,
           });
         }, "Registrando…");
+        if (f.compra) {
+          f.compra.unidades += ingreso.cantidad;
+          f.compra.total = Number(f.compra.total) + ingreso.cantidad * Number(ingreso.costo_unitario);
+          pintarCompra();
+        }
         await cargarProductos();
         confirmarIngreso(ingreso);
       } catch (e) {
@@ -160,6 +183,7 @@ export async function vistaIngresos(_pagina, ctx) {
     el("div.formulario-ingreso",
       el("div.columna-foto", cajaFoto, botonesFoto(elegirFoto)),
       el("div.pila",
+        resumenCompra,
         modo,
         zonaProducto,
         el("div.rejilla.tres",
@@ -176,25 +200,25 @@ export async function vistaIngresos(_pagina, ctx) {
     const p = estado.productos.find((x) => x.id === ingreso.producto_id) || {};
     const eraNuevo = f.modo === "nuevo";
     const fotoUsada = f.fotoRuta || p.foto_path;
+    const etiqueta = marbete(ingreso, p);
     const { cerrar } = abrirHoja({
       titulo: "Ingreso registrado",
       clase: "chica",
       cuerpo: el("div",
-        el("div.marbete",
-          el("img.logo", { src: "img/logo-chico.webp", alt: estado.ajustes?.nombre_tienda || "Myle Store" }),
-          el("div.nombre", p.nombre),
-          el("div.detalles", talla(p.talla), p.color ? tela(p.color) : null),
-          el("div.precio", dinero(ingreso.precio_venta)),
-          el("div.codigo", el("small", "Serie de ingreso"), ingreso.serie),
-          el("div.cantidad", `Ingresaron ${ingreso.cantidad} ${ingreso.cantidad === 1 ? "unidad" : "unidades"} · quedan ${p.existencias} disponibles`)),
-        el("p.tenue", { style: "text-align:center;margin-top:16px;font-size:13px" }, "Anote la serie en la etiqueta o en la bolsa del lote si le sirve para ubicarlo.")),
+        etiqueta,
+        el("p.tenue", { style: "text-align:center;margin-top:12px;font-size:13px" }, `Quedan ${p.existencias} disponibles. La etiqueta se puede volver a ver e imprimir desde la ficha del producto.`),
+        el("div", { style: "display:flex;justify-content:center;margin-top:10px" },
+          el("button.btn.chico", { type: "button", onclick: () => imprimirEtiqueta(etiqueta, `Etiqueta ${ingreso.serie}`) }, icono("imprimir", "chico"), "Imprimir etiqueta"))),
       pie: [
         eraNuevo ? el("button.btn", { type: "button", onclick: () => { f.siguiendo = true; cerrar(); otraTalla(fotoUsada); } }, icono("mas"), "Otra talla o color") : null,
-        el("button.btn.primario", { type: "button", onclick: () => cerrar() }, "Listo"),
+        f.compra && faltanDeCompra() > 0 ? el("button.btn.primario", { type: "button", onclick: () => { f.siguiendo = true; cerrar(); otraPrenda(); } }, icono("caja"), `Siguiente prenda (faltan ${faltanDeCompra()})`) : null,
+        f.compra ? el("button.btn" + (faltanDeCompra() > 0 ? "" : ".primario"), { type: "button", onclick: () => { f.siguiendo = true; cerrar(); location.hash = `#/movimientos/compras/${f.compra.id}`; } }, faltanDeCompra() > 0 ? "Ver compra" : "Compra completa · ver") : null,
+        !f.compra ? el("button.btn.primario", { type: "button", onclick: () => cerrar() }, "Listo") : null,
       ],
       alCerrar: () => { if (!f.siguiendo) limpiar(); f.siguiendo = false; refrescarHistorial(); },
     });
   }
+  const faltanDeCompra = () => (f.compra ? Math.max(0, (f.compra.prendas_pedidas || 0) - (f.compra.unidades || 0)) : 0);
   // Mismo producto en otra talla: se queda nombre, categoría, color, foto y precios
   function otraTalla(ruta) {
     f.foto = null;
@@ -209,8 +233,16 @@ export async function vistaIngresos(_pagina, ctx) {
     avisar("Elija la otra talla y la cantidad");
     tallaIn.focus();
   }
+  function otraPrenda() {
+    const compra = f.compra;
+    limpiar();
+    f.compra = compra;
+    pintarCompra();
+    (f.modo === "nuevo" ? nombre : zonaProducto.querySelector("input"))?.focus();
+  }
   function limpiar() {
     Object.assign(f, { modo: f.modo, producto: null, foto: null, fotoRuta: null });
+    pintarCompra();
     if (f.fotoUrl) URL.revokeObjectURL(f.fotoUrl);
     f.fotoUrl = null;
     for (const i of [nombre, categoria, tallaIn, color, nota, costoIn, precioIn]) i.value = "";
@@ -243,7 +275,7 @@ export async function vistaIngresos(_pagina, ctx) {
   const categorias = [...new Set([...estado.productos.map((p) => p.categoria).filter(Boolean), ...CATEGORIAS_COMUNES])];
   ctx.pintar(
     el("div.cabeza",
-      el("div", el("h1", "Ingresos"), el("p", "Registre la mercadería que entra. Cada ingreso recibe su número de serie."))),
+      el("div", el("h1", f.compra ? "Registrar prenda" : "Ingresos"), el("p", f.compra ? `Prenda por prenda de la compra ${f.compra.numero}. Cada una recibe su número de serie.` : "Registre la mercadería que entra. Cada ingreso recibe su número de serie."))),
     el("datalist", { id: "lista-nombres" }, nombres.map((n) => el("option", { value: n }))),
     el("datalist", { id: "lista-categorias" }, categorias.map((c) => el("option", { value: c }))),
     el("datalist", { id: "lista-colores" }, COLORES_COMUNES.map((c) => el("option", { value: c }))),
@@ -253,6 +285,7 @@ export async function vistaIngresos(_pagina, ctx) {
       lista));
   pintarModo();
   pintarFoto();
+  pintarCompra();
   calcular();
   pintarHistorial(historial);
   if (preProducto) elegirProducto(preProducto);

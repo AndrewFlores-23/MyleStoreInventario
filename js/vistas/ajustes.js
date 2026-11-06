@@ -2,6 +2,7 @@
 import { datos, DEMO } from "../datos.js";
 import { estado, cargarAjustes } from "../estado.js";
 import { el, icono, trabajando, avisar, mensajeError, confirmar } from "../util.js";
+import { panelProveedores } from "./proveedores.js";
 
 const CAMPOS = [
   ["Tienda", [
@@ -78,6 +79,7 @@ export async function vistaAjustes(_pagina, ctx) {
   ctx.pintar(el("div.ajustes",
     el("div.cabeza", el("div", el("h1", "Ajustes"), el("p", "Datos de la tienda y de pago que ven los clientes en la factura."))),
     form,
+    panelProveedores(),
     el("section.panel",
       el("div.panel-titulo", el("h2", "Apariencia")),
       selectorTema),

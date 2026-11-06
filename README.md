@@ -3,8 +3,12 @@
 Sistema de inventario para una tienda de ropa que vende en línea desde casa. Funciona en el celular y en la compu.
 
 - **Ingresos:** cada entrada de mercadería lleva foto, cantidad, precio de costo y precio de venta final, y recibe un **número de serie único** (`MS-00001`). Sirve para un producto nuevo o para reponer uno que ya existe. Con «Otra talla o color» se registra la misma prenda en otra talla sin volver a escribir todo.
-- **Inventario:** las prendas con su foto, talla, color, precio y cuántas quedan disponibles. La ficha de cada una muestra su ganancia y todo su historial.
+- **Inventario:** las prendas con su foto, talla, color, precio y cuántas quedan disponibles. La ficha de cada una muestra su ganancia, las etiquetas de serie de cada ingreso (se vuelven a ver e imprimir las veces que haga falta) y todo su historial.
+- **Inicio:** arriba va el recorrido de la tienda en cinco pasos (proveedores → compras → inventario → apartados → entregas), cada uno con lo que falta y un enlace a su pantalla.
 - **Salidas:** venta directa, prenda dañada, devolución al proveedor, regalo o ajuste de conteo.
+- **Proveedores:** se registran en *Ajustes* (nombre, teléfono, correo, dirección y nota) o desde una compra nueva con «Nuevo»; al crear la compra se elige uno de la lista.
+- **Compras de mercadería:** primero se registra la compra al proveedor (`CO-0001`): proveedor elegido de la lista, factura, fecha, cuántas prendas se compraron y cuánto se pagó. Después, desde la compra, se registra prenda por prenda en el inventario con «Registrar prenda»; la compra muestra el avance («3 de 10 registradas · faltan 7») y queda completa al llegar a lo pactado.
+- **Movimientos:** el registro de la mercadería en tres pestañas. *Compras*: la lista de compras con su avance y lo pagado. *Salidas*: qué salió, cuándo y por qué, con filtro por motivo. *Todo*: entradas y salidas en orden, con filtro por producto. Todas filtran por mes.
 - **Apartados:** el pedido armado para un cliente que todavía no se entrega. Al crearlo, las prendas **se restan del inventario disponible** y se genera la **factura** con los datos del cliente, el total de artículos, el envío, el monto total y los datos de depósito (SINPE Móvil y cuenta IBAN). Después se marca como **pagado (cancelado)** y como **entregado**. Si el cliente no sigue, se anula y las prendas vuelven al inventario.
 - **Factura:** se envía por WhatsApp con un enlace que el cliente abre sin cuenta, o se imprime o se guarda en PDF.
 - **Fotos:** en el celular, «Tomar foto» abre directo la cámara de atrás y «Galería» elige una foto guardada.

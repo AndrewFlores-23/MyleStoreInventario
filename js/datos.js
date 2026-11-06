@@ -108,13 +108,42 @@ async function crearReal() {
       return rpc("registrar_ingreso", {
         p_cantidad: d.cantidad, p_costo: d.costo, p_precio: d.precio, p_producto_id: d.productoId || null,
         p_nombre: d.nombre || null, p_categoria: d.categoria || null, p_talla: d.talla || null, p_color: d.color || null,
-        p_foto_path: d.fotoPath || null, p_nota: d.nota || null,
+        p_foto_path: d.fotoPath || null, p_nota: d.nota || null, p_compra_id: d.compraId || null,
       });
     },
-    async ingresos({ productoId, limite = 200 } = {}) {
+    async ingresos({ productoId, compraId, limite = 200 } = {}) {
       let q = sb.from("ingresos").select("*, producto:productos(id, nombre, talla, color, foto_path)").order("creado_en", { ascending: false }).limit(limite);
       if (productoId) q = q.eq("producto_id", productoId);
+      if (compraId) q = q.eq("compra_id", compraId);
       return respuesta(await q);
+    },
+
+    // ---------- Compras (facturas de proveedor) ----------
+    crearCompra: (d) => rpc("crear_compra", {
+      p_proveedor: d.proveedor || null, p_proveedor_id: d.proveedorId || null, p_factura: d.factura || null, p_nota: d.nota || null,
+      p_prendas_pedidas: d.prendasPedidas || 0, p_monto_pagado: d.montoPagado || 0, p_fecha_compra: d.fechaCompra || null,
+    }),
+
+    // ---------- Proveedores ----------
+    async proveedores() {
+      return respuesta(await sb.from("proveedores").select("*").order("nombre"));
+    },
+    async crearProveedor(d) {
+      return respuesta(await sb.from("proveedores").insert({
+        nombre: d.nombre.trim(), telefono: d.telefono || null, correo: d.correo || null, direccion: d.direccion || null, nota: d.nota || null,
+      }).select().single());
+    },
+    async editarProveedor(id, cambios) {
+      return respuesta(await sb.from("proveedores").update(cambios).eq("id", id).select().single());
+    },
+    async compra(id) {
+      return respuesta(await sb.from("compras").select("*, ingresos(id, serie, cantidad, costo_unitario, precio_venta, creado_en, producto:productos(id, nombre, talla, color, foto_path))").eq("id", id).maybeSingle());
+    },
+    async compras({ limite = 300 } = {}) {
+      return respuesta(await sb.from("compras").select("*, ingresos(id, serie, cantidad, costo_unitario, precio_venta, creado_en, producto:productos(id, nombre, talla, color, foto_path))").order("creado_en", { ascending: false }).limit(limite));
+    },
+    async editarCompra(id, cambios) {
+      return respuesta(await sb.from("compras").update(cambios).eq("id", id).select().single());
     },
     registrarSalida(d) {
       return rpc("registrar_salida", {
