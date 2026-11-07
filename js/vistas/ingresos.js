@@ -1,10 +1,10 @@
-// Ingresos: entra mercadería (producto nuevo o reposición) con foto, cantidad, costo y precio de venta.
+// Ingresos: entra mercadería (producto nuevo o reposición) con cantidad, costo y precio de venta.
 // Cada ingreso recibe su número de serie único (MS-00001) y queda en el historial.
 import { datos } from "../datos.js";
 import { estado, cargarProductos } from "../estado.js";
-import { el, icono, dinero, numero, fecha, talla, tela, colorTela, comprimirFoto, campoDinero, contador, trabajando, avisar, mensajeError,
+import { el, icono, dinero, numero, fecha, talla, colorTela, campoDinero, contador, trabajando, avisar, mensajeError,
   abrirHoja, confirmar, subir, TALLAS_COMUNES, COLORES_COMUNES, CATEGORIAS_COMUNES } from "../util.js";
-import { fotoProducto, selectorProducto, productoElegido, botonesFoto, marbete, imprimirEtiqueta, vacio } from "../componentes.js";
+import { marcaProducto, selectorProducto, productoElegido, marbete, imprimirEtiqueta, vacio } from "../componentes.js";
 import { abrirFicha } from "./inventario.js";
 
 export async function vistaIngresos(_pagina, ctx) {
@@ -13,7 +13,7 @@ export async function vistaIngresos(_pagina, ctx) {
   const [historial, compraInicial] = await Promise.all([datos.ingresos({ limite: 100 }), compraId ? datos.compra(compraId).catch(() => null) : null, cargarProductos()]);
 
   // ---------- Estado del formulario ----------
-  const f = { modo: "nuevo", producto: null, foto: null, fotoUrl: null, fotoRuta: null, compra: compraInicial };
+  const f = { modo: "nuevo", producto: null, compra: compraInicial };
   const preProducto = estado.productos.find((p) => p.id === ctx.consulta.get("producto"));
   if (preProducto) Object.assign(f, { modo: "existente", producto: preProducto });
 
@@ -77,30 +77,6 @@ export async function vistaIngresos(_pagina, ctx) {
       el("span", "Venta esperada ", el("b", dinero(v * n))));
   }
 
-  // ---------- Foto ----------
-  const cajaFoto = el("label.subir-foto");
-  const entradaFoto = el("input", { type: "file", accept: "image/*", "aria-label": "Foto del producto", onchange: (e) => elegirFoto(e.target.files[0]) });
-  function pintarFoto() {
-    const actual = f.fotoUrl || (f.modo === "existente" && f.producto ? datos.urlFoto(f.producto.foto_path) : null) || (f.fotoRuta ? datos.urlFoto(f.fotoRuta) : null);
-    cajaFoto.replaceChildren(...[
-      actual ? el("img", { src: actual, alt: "" }) : el("div.texto", icono("camara"), el("strong", "Tomar o elegir foto"), el("span.tenue", f.modo === "existente" ? "Opcional: cambia la foto del producto" : "Se verá en el inventario y en la factura")),
-      actual ? el("span.cambiar", f.foto || f.fotoRuta ? "Cambiar foto" : "Cambiar foto (opcional)") : null,
-      entradaFoto].filter(Boolean));
-  }
-  async function elegirFoto(archivo) {
-    if (!archivo) return;
-    try {
-      f.foto = await comprimirFoto(archivo);
-      f.fotoRuta = null;
-      if (f.fotoUrl) URL.revokeObjectURL(f.fotoUrl);
-      f.fotoUrl = URL.createObjectURL(f.foto);
-      pintarFoto();
-    } catch (e) {
-      avisar(mensajeError(e), "error");
-    }
-    entradaFoto.value = "";
-  }
-
   // ---------- Modo: producto nuevo o uno que ya existe ----------
   const zonaProducto = el("div.pila");
   const modo = el("div.selector-modo",
@@ -110,7 +86,6 @@ export async function vistaIngresos(_pagina, ctx) {
     f.modo = m;
     if (m === "nuevo") f.producto = null;
     pintarModo();
-    pintarFoto();
   }
   function elegirProducto(p) {
     f.producto = p;
@@ -118,7 +93,6 @@ export async function vistaIngresos(_pagina, ctx) {
     precioIn.value = Number(p.precio_venta) || "";
     calcular();
     pintarModo();
-    pintarFoto();
   }
   function pintarModo() {
     modo.querySelectorAll("[data-modo]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.modo === f.modo)));
@@ -133,7 +107,7 @@ export async function vistaIngresos(_pagina, ctx) {
       marcarTalla();
     } else {
       zonaProducto.replaceChildren(f.producto
-        ? el("div.campo", el("span", "Producto"), productoElegido(f.producto, () => { f.producto = null; pintarModo(); pintarFoto(); }))
+        ? el("div.campo", el("span", "Producto"), productoElegido(f.producto, () => { f.producto = null; pintarModo(); }))
         : el("div.campo", el("span", "Busque el producto"), selectorProducto({ alElegir: elegirProducto })));
       if (!f.producto) zonaProducto.querySelector("input")?.focus();
     }
@@ -159,11 +133,9 @@ export async function vistaIngresos(_pagina, ctx) {
       if (v < c && !(await confirmar("El precio de venta es menor que el costo", { detalle: `Vendería cada prenda en ${dinero(v)} y le costó ${dinero(c)}.`, si: "Registrar igual" }))) return;
       try {
         const ingreso = await trabajando(boton, async () => {
-          if (f.foto && !f.fotoRuta) f.fotoRuta = await datos.subirFoto(f.foto);
           return datos.registrarIngreso({
             productoId: f.modo === "existente" ? f.producto.id : null,
             nombre: nombre.value, categoria: categoria.value, talla: tallaIn.value, color: color.value,
-            fotoPath: f.fotoRuta,
             cantidad: cantidad.leer(), costo: c, precio: v, nota: nota.value, compraId: f.compra?.id || null,
           });
         }, "Registrando…");
@@ -180,26 +152,23 @@ export async function vistaIngresos(_pagina, ctx) {
       }
     },
   },
-    el("div.formulario-ingreso",
-      el("div.columna-foto", cajaFoto, botonesFoto(elegirFoto)),
-      el("div.pila",
-        resumenCompra,
-        modo,
-        zonaProducto,
-        el("div.rejilla.tres",
-          el("div.campo", el("span", "Cantidad que ingresó"), cantidad),
-          el("label.campo", el("span", "Precio de costo ", el("em", "(c/u)")), costo),
-          el("label.campo", el("span", "Precio de venta final"), precio)),
-        ganancia,
-        el("label.campo", el("span", "Nota ", el("em", "(opcional)")), nota),
-        error,
-        el("div.acciones-form", boton))));
+    el("div.pila",
+      resumenCompra,
+      modo,
+      zonaProducto,
+      el("div.rejilla.tres",
+        el("div.campo", el("span", "Cantidad que ingresó"), cantidad),
+        el("label.campo", el("span", "Precio de costo ", el("em", "(c/u)")), costo),
+        el("label.campo", el("span", "Precio de venta final"), precio)),
+      ganancia,
+      el("label.campo", el("span", "Nota ", el("em", "(opcional)")), nota),
+      error,
+      el("div.acciones-form", boton)));
 
   // Marbete con la serie recién asignada
   function confirmarIngreso(ingreso) {
     const p = estado.productos.find((x) => x.id === ingreso.producto_id) || {};
     const eraNuevo = f.modo === "nuevo";
-    const fotoUsada = f.fotoRuta || p.foto_path;
     const etiqueta = marbete(ingreso, p);
     const { cerrar } = abrirHoja({
       titulo: "Ingreso registrado",
@@ -210,7 +179,7 @@ export async function vistaIngresos(_pagina, ctx) {
         el("div", { style: "display:flex;justify-content:center;margin-top:10px" },
           el("button.btn.chico", { type: "button", onclick: () => imprimirEtiqueta(etiqueta, `Etiqueta ${ingreso.serie}`) }, icono("imprimir", "chico"), "Imprimir etiqueta"))),
       pie: [
-        eraNuevo ? el("button.btn", { type: "button", onclick: () => { f.siguiendo = true; cerrar(); otraTalla(fotoUsada); } }, icono("mas"), "Otra talla o color") : null,
+        eraNuevo ? el("button.btn", { type: "button", onclick: () => { f.siguiendo = true; cerrar(); otraTalla(); } }, icono("mas"), "Otra talla o color") : null,
         f.compra && faltanDeCompra() > 0 ? el("button.btn.primario", { type: "button", onclick: () => { f.siguiendo = true; cerrar(); otraPrenda(); } }, icono("caja"), `Siguiente prenda (faltan ${faltanDeCompra()})`) : null,
         f.compra ? el("button.btn" + (faltanDeCompra() > 0 ? "" : ".primario"), { type: "button", onclick: () => { f.siguiendo = true; cerrar(); location.hash = `#/movimientos/compras/${f.compra.id}`; } }, faltanDeCompra() > 0 ? "Ver compra" : "Compra completa · ver") : null,
         !f.compra ? el("button.btn.primario", { type: "button", onclick: () => cerrar() }, "Listo") : null,
@@ -219,16 +188,11 @@ export async function vistaIngresos(_pagina, ctx) {
     });
   }
   const faltanDeCompra = () => (f.compra ? Math.max(0, (f.compra.prendas_pedidas || 0) - (f.compra.unidades || 0)) : 0);
-  // Mismo producto en otra talla: se queda nombre, categoría, color, foto y precios
-  function otraTalla(ruta) {
-    f.foto = null;
-    if (f.fotoUrl) URL.revokeObjectURL(f.fotoUrl);
-    f.fotoUrl = null;
-    f.fotoRuta = ruta || null;
+  // Mismo producto en otra talla: se queda nombre, categoría, color y precios
+  function otraTalla() {
     tallaIn.value = "";
     cantidad.poner(1);
     marcarTalla();
-    pintarFoto();
     nota.value = "";
     avisar("Elija la otra talla y la cantidad");
     tallaIn.focus();
@@ -241,15 +205,12 @@ export async function vistaIngresos(_pagina, ctx) {
     (f.modo === "nuevo" ? nombre : zonaProducto.querySelector("input"))?.focus();
   }
   function limpiar() {
-    Object.assign(f, { modo: f.modo, producto: null, foto: null, fotoRuta: null });
+    Object.assign(f, { modo: f.modo, producto: null });
     pintarCompra();
-    if (f.fotoUrl) URL.revokeObjectURL(f.fotoUrl);
-    f.fotoUrl = null;
     for (const i of [nombre, categoria, tallaIn, color, nota, costoIn, precioIn]) i.value = "";
     cantidad.poner(1);
     calcular();
     pintarModo();
-    pintarFoto();
     subir(true);
   }
 
@@ -257,7 +218,7 @@ export async function vistaIngresos(_pagina, ctx) {
   const lista = el("div.lista");
   const pintarHistorial = (items) => {
     lista.replaceChildren(...(items.length ? items.map((i) => el("button.renglon", { type: "button", onclick: () => abrirFicha(i.producto_id) },
-      fotoProducto(i.producto),
+      marcaProducto(i.producto),
       el("div.renglon-cuerpo",
         el("div.renglon-titulo", i.producto?.nombre || "Producto"),
         el("div.renglon-sub", el("span.serie", i.serie), talla(i.producto?.talla), el("span.tenue", fecha(i.creado_en))),
@@ -284,7 +245,6 @@ export async function vistaIngresos(_pagina, ctx) {
       el("div.panel-titulo", el("h2", "Historial de ingresos"), el("span.tenue", { style: "font-size:13px" }, "Últimos 100")),
       lista));
   pintarModo();
-  pintarFoto();
   pintarCompra();
   calcular();
   pintarHistorial(historial);

@@ -2,22 +2,23 @@
 
 Sistema de inventario para una tienda de ropa que vende en línea desde casa. Funciona en el celular y en la compu.
 
-- **Ingresos:** cada entrada de mercadería lleva foto, cantidad, precio de costo y precio de venta final, y recibe un **número de serie único** (`MS-00001`). Sirve para un producto nuevo o para reponer uno que ya existe. Con «Otra talla o color» se registra la misma prenda en otra talla sin volver a escribir todo.
-- **Inventario:** las prendas con su foto, talla, color, precio y cuántas quedan disponibles. La ficha de cada una muestra su ganancia, las etiquetas de serie de cada ingreso (se vuelven a ver e imprimir las veces que haga falta) y todo su historial.
-- **Cómo vamos (Inicio):** vendido hoy y en el mes (apartados cobrados + ventas directas), ganancia estimada de lo que hay en inventario y ganancia esperada de lo ingresado en el mes.
+- **Ingresos:** cada entrada de mercadería lleva cantidad, precio de costo y precio de venta final, y recibe un **número de serie único** (`MS-00001`). Sirve para un producto nuevo o para reponer uno que ya existe. Con «Otra talla o color» se registra la misma prenda en otra talla sin volver a escribir todo.
+- **Inventario:** las prendas con su talla, color, precio y cuántas quedan disponibles. La ficha de cada una muestra su ganancia, las etiquetas de serie de cada ingreso (se vuelven a ver e imprimir las veces que haga falta) y todo su historial.
+- **Cómo vamos (Inicio):** vendido hoy y en el mes (facturas de contado), ganancia del mes (vendido menos costo de las prendas y gastos), ganancia estimada del inventario, ganancia esperada de lo ingresado y gastos del mes.
 - **Guía:** en *Ajustes → Cómo usar el sistema* hay un recorrido animado de dos minutos (`guia.html`) con datos de ejemplo que explica cada parte; se reproduce solo, se pausa y se salta por escenas.
 - **Desde cualquier dispositivo:** todo se guarda en Supabase; en el dispositivo solo queda la sesión y el tema. Con el correo y la contraseña, los mismos datos aparecen en cualquier celular o computadora.
-- **Inicio:** arriba va el recorrido de la tienda en cinco pasos (proveedores → compras → inventario → apartados → entregas), cada uno con lo que falta y un enlace a su pantalla.
-- **Salidas:** venta directa, prenda dañada, devolución al proveedor, regalo o ajuste de conteo.
+- **Inicio:** arriba va el recorrido de la tienda en cinco pasos (proveedores → compras → inventario → apartados → facturación), cada uno con lo que falta y un enlace a su pantalla.
+- **Salidas:** prenda dañada, devolución al proveedor, regalo o ajuste de conteo.
 - **Proveedores:** se registran en *Ajustes* (nombre, teléfono, correo, dirección y nota) o desde una compra nueva con «Nuevo»; al crear la compra se elige uno de la lista.
 - **Compras de mercadería:** primero se registra la compra al proveedor (`CO-0001`): proveedor elegido de la lista, factura, fecha, cuántas prendas se compraron y cuánto se pagó. Después, desde la compra, se registra prenda por prenda en el inventario con «Registrar prenda»; la compra muestra el avance («3 de 10 registradas · faltan 7») y queda completa al llegar a lo pactado.
 - **Movimientos:** el registro de la mercadería en tres pestañas. *Compras*: la lista de compras con su avance y lo pagado. *Salidas*: qué salió, cuándo y por qué, con filtro por motivo. *Todo*: entradas y salidas en orden, con filtro por producto. Todas filtran por mes.
-- **Apartados:** el pedido armado para un cliente que todavía no se entrega. Al crearlo, las prendas **se restan del inventario disponible** y se genera la **factura** con los datos del cliente, el total de artículos, el envío, el monto total y los datos de depósito (SINPE Móvil y cuenta IBAN). Después se marca como **pagado (cancelado)** y como **entregado**. Si el cliente no sigue, se anula y las prendas vuelven al inventario.
-- **Factura:** se envía por WhatsApp con un enlace que el cliente abre sin cuenta, o se imprime o se guarda en PDF.
-- **Fotos:** en el celular, «Tomar foto» abre directo la cámara de atrás y «Galería» elige una foto guardada.
+- **Apartados:** el pedido de un cliente que todavía no paga. Al crearlo, las prendas **se restan del inventario disponible** y quedan guardadas para él. No lleva factura: cuando el cliente paga, se pasa a Facturación con un botón. Si no sigue, se anula y las prendas vuelven.
+- **Facturación:** la **factura de contado** (`FC-0001`) de una venta ya pagada: directa (las prendas salen del inventario) o desde un apartado (ya salieron). Lleva forma de pago, envío y descuento, sin fotos. Se envía por WhatsApp con un enlace que el cliente abre sin cuenta, se comparte, se imprime o se guarda en PDF las veces que haga falta. Anularla devuelve las prendas.
+- **Gastos:** lo que gasta el negocio fuera de la mercadería (`GA-0001`): cinta, bolsas, gasolina, envíos, publicidad. Con categoría, fecha y con qué se pagó; se restan de la ganancia del mes.
+- **Sin fotos:** el sistema trabaja solo con lo que se escribe de cada prenda (nombre, talla, color, precios); no se suben imágenes.
 - **Entrada:** con «Mantener la sesión iniciada» no hay que volver a escribir la contraseña en ese dispositivo hasta cerrar sesión. La app se puede instalar en la pantalla de inicio del celular (en iPhone: Compartir → «Agregar a inicio»; en Android: menú → «Instalar app»).
 
-Es HTML, CSS y JavaScript sin compilar, con [Supabase](https://supabase.com) como base de datos y lugar para las fotos.
+Es HTML, CSS y JavaScript sin compilar, con [Supabase](https://supabase.com) como base de datos.
 
 **Diseño:** sigue la marca de Myle Store · Moda & Beauty: rubor y blanco, frambuesa para las acciones, detalles dorados y la letra Bodoni del logo. La factura que recibe el cliente lleva el logo. En *Ajustes* hay un tema oscuro («Noche»).
 
@@ -51,15 +52,15 @@ Al ser archivos estáticos, se puede publicar en GitHub Pages (*Settings → Pag
 
 ## Cómo se cuidan los datos
 
-- Las existencias solo cambian con las funciones de la base (`registrar_ingreso`, `registrar_salida`, `crear_apartado`, `anular_apartado`). Cada una deja su movimiento, así que el inventario siempre cuadra con el historial. Nadie puede cambiar existencias ni borrar movimientos a mano desde la app.
-- Un apartado revisa primero que alcancen las existencias. Si no alcanzan, no se crea ni gasta número de factura.
+- Las existencias solo cambian con las funciones de la base (`registrar_ingreso`, `registrar_salida`, `crear_apartado`, `anular_apartado`, `crear_factura`, `anular_factura`). Cada una deja su movimiento, así que el inventario siempre cuadra con el historial. Nadie puede cambiar existencias ni borrar movimientos a mano desde la app.
+- Un apartado o una factura directa revisan primero que alcancen las existencias. Si no alcanzan, no se crean ni gastan número.
 - La factura pública solo se abre con su enlace secreto y no muestra costos ni notas internas.
-- «Cancelado» en la factura significa pagado, como se usa en Costa Rica. Para dejar sin efecto un apartado, la app dice «Anular».
+- «Cancelado» en la factura significa pagado, como se usa en Costa Rica. Para dejar sin efecto un apartado o una factura, la app dice «Anular».
 
 ## Estructura
 
 ```
-index.html            app (inventario, ingresos, salidas, apartados, ajustes)
+index.html            app (inventario, ingresos, salidas, apartados, facturación, gastos, ajustes)
 guia.html             guía animada de uso con datos de ejemplo (js/guia.js, css/guia.css)
 factura.html          factura pública que abre el cliente
 css/app.css           estilos (tema de la marca y tema oscuro)

@@ -1,5 +1,4 @@
-// Piezas que se repiten en varias vistas: foto de la prenda, buscador de productos, sellos y renglones del historial
-import { datos } from "./datos.js";
+// Piezas que se repiten en varias vistas: muestra de color de la prenda, buscador de productos, sellos y renglones del historial
 import { estado } from "./estado.js";
 import { el, icono, talla, tela, colorTela, dinero, fecha, fechaHora, diasDesde, sinTildes, abrirHoja } from "./util.js";
 
@@ -7,6 +6,7 @@ export const MOTIVOS = {
   ingreso: "Ingreso",
   anulacion: "Apartado anulado",
   apartado: "Apartado",
+  factura: "Factura de contado",
   venta: "Venta directa",
   danado: "Dañado o defectuoso",
   devolucion: "Devolución al proveedor",
@@ -14,29 +14,13 @@ export const MOTIVOS = {
   ajuste: "Ajuste de conteo",
 };
 
-export function fotoProducto(p, clase = "miniatura") {
-  const url = datos.urlFoto(p?.foto_path);
-  if (url) return el("img." + clase, { src: url, alt: "", loading: "lazy", decoding: "async" });
+// Muestra de la prenda: su color como un retazo de tela (no se usan fotos); sin color, una percha
+export function marcaProducto(p, clase = "miniatura") {
   const c = colorTela(p?.color);
-  return el("div." + clase + ".marcador", c ? { style: `--tela:${c}` } : {}, el("div.foto-marcador", icono("percha")));
+  return el("div." + clase + ".marcador", c ? { style: `--tela:${c}`, title: p.color } : {}, c ? null : icono("percha"));
 }
 
 export const detallesProducto = (p) => [talla(p.talla), tela(p.color)];
-
-// Botones de la foto: en el celular, «Tomar foto» abre directo la cámara de atrás y «Galería» elige una guardada.
-// En la compu (sin pantalla táctil) queda un solo botón para elegir el archivo.
-export function botonesFoto(alElegir, { chico = false } = {}) {
-  const tactil = matchMedia("(pointer: coarse)").matches;
-  const entrada = (camara) => el("input.oculto", {
-    type: "file", accept: "image/*", capture: camara ? "environment" : null, tabindex: "-1",
-    onchange: (e) => { const archivo = e.target.files[0]; e.target.value = ""; if (archivo) alElegir(archivo); },
-  });
-  const camara = entrada(true), galeria = entrada(false);
-  const boton = "button.btn" + (chico ? ".chico" : "");
-  return el("div.botones-foto", camara, galeria,
-    tactil ? el(boton, { type: "button", onclick: () => camara.click() }, icono("camara", "chico"), "Tomar foto") : null,
-    el(boton, { type: "button", onclick: () => galeria.click() }, icono("galeria", "chico"), tactil ? "Galería" : "Elegir foto"));
-}
 
 export function nombreCompleto(p) {
   return [p.nombre, p.talla && `talla ${p.talla}`, p.color].filter(Boolean).join(" · ");
@@ -71,7 +55,7 @@ export function selectorProducto({ alElegir, soloDisponibles = false, placeholde
         style: bloqueado ? "opacity:.5;cursor:not-allowed" : null,
         onclick: () => { if (!bloqueado) { entrada.value = ""; resultados.replaceChildren(); alElegir(p); } },
       },
-        fotoProducto(p),
+        marcaProducto(p),
         el("div.renglon-cuerpo",
           el("div.renglon-titulo", p.nombre),
           el("div.renglon-sub", detallesProducto(p), p.categoria ? el("span.tenue", p.categoria) : null)),
@@ -90,7 +74,7 @@ export function selectorProducto({ alElegir, soloDisponibles = false, placeholde
 // Producto elegido, con botón para cambiarlo
 export function productoElegido(p, alQuitar) {
   return el("div.elegido",
-    fotoProducto(p),
+    marcaProducto(p),
     el("div.renglon-cuerpo",
       el("div.renglon-titulo", p.nombre),
       el("div.renglon-sub", detallesProducto(p), el("span", `${p.existencias} disponible${p.existencias === 1 ? "" : "s"}`))),
@@ -100,13 +84,15 @@ export function productoElegido(p, alQuitar) {
 // ---------- Apartados ----------
 export function sellosApartado(ap) {
   if (ap.estado === "anulado") return [el("span.sello.anulado", "Anulado")];
-  return [
-    ap.pagado ? el("span.sello.pagado", "Pagado") : el("span.sello.pago-pendiente", "Pendiente de pago"),
-    ap.estado === "entregado" ? el("span.sello.entregado", "✓ Entregado") : el("span.sello.por-entregar", "Por entregar"),
-  ];
+  if (ap.estado === "facturado") return [el("span.sello.pagado", `✓ Facturado${ap.factura?.numero ? ` · ${ap.factura.numero}` : ""}`)];
+  return [el("span.sello.pago-pendiente", "Apartado")];
 }
 
-// Días que lleva un apartado sin entregarse: a los 4 se pone amarillo y a los 8 rojo
+export function sellosFactura(f) {
+  return f.estado === "anulada" ? [el("span.sello.anulado", "Anulada")] : [el("span.sello.pagado", "Cancelado")];
+}
+
+// Días que lleva un apartado sin facturarse: a los 4 se pone amarillo y a los 8 rojo
 export function cajaDias(ap) {
   if (ap.estado !== "pendiente") return el("div.dias.listo", el("b", ap.estado === "anulado" ? "—" : "✓"), el("small", ap.estado === "anulado" ? "anulado" : "listo"));
   const n = diasDesde(ap.creado_en);
@@ -128,7 +114,7 @@ export function renglonMovimiento(m, { alAbrir, mostrarProducto = true } = {}) {
     el("div.renglon-sub",
       mostrarProducto ? [talla(p.talla), el("span", detalle)] : null,
       ref,
-      m.motivo === "apartado" && m.apartado?.estado === "entregado" ? el("span.sello.entregado", "✓ Entregado") : null,
+      m.motivo === "apartado" && m.apartado?.estado === "facturado" ? el("span.sello.entregado", "✓ Facturado") : null,
       m.motivo === "apartado" && m.apartado?.estado === "anulado" ? el("span.sello.anulado", "Anulado") : null,
       el("span.tenue", fechaHora(m.creado_en))),
     m.nota ? el("div.renglon-sub.tenue", m.nota) : null,
@@ -136,8 +122,9 @@ export function renglonMovimiento(m, { alAbrir, mostrarProducto = true } = {}) {
   const fin = el("div.renglon-fin",
     el("div.num", { style: `color:var(${m.tipo === "entrada" ? "--listo" : "--texto"})` }, `${signo}${m.cantidad}`),
     el("small", `quedan ${m.existencias_despues}`));
+  if (m.motivo === "factura" && m.referencia) detalle = `Factura ${m.referencia}`;
   const props = alAbrir ? { type: "button", onclick: () => alAbrir(m) } : {};
-  return el(alAbrir ? "button.renglon" : "div.renglon", props, mostrarProducto ? fotoProducto(p) : null, el("div.renglon-cuerpo", cuerpo), fin);
+  return el(alAbrir ? "button.renglon" : "div.renglon", props, mostrarProducto ? marcaProducto(p) : null, el("div.renglon-cuerpo", cuerpo), fin);
 }
 
 // Etiqueta del número de serie de un ingreso (marbete), la misma que sale al registrar y se puede volver a ver e imprimir

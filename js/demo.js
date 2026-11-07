@@ -1,7 +1,7 @@
 // Modo demo: las mismas funciones y reglas que la base de Supabase, con datos de ejemplo guardados en este navegador.
 // Sirve para probar la app y mostrarla antes de conectar la base. Los datos de depósito son de mentira a propósito.
 
-const CLAVE = "myle-demo-v1";
+const CLAVE = "myle-demo-v3";
 const PREFIJO_FOTO = "myle-demo-foto:";
 const EMAIL = "demo@mylestore";
 const memoria = { db: null, fotos: {} };
@@ -139,8 +139,8 @@ function apartar(db, d, cuando = ahora()) {
   const ap = {
     id: uuid(), numero: "AP-" + pad(siguiente(db, "apartado"), 4), token: uuid(), cliente_nombre: limpio(d.clienteNombre),
     cliente_telefono: limpio(d.clienteTelefono), cliente_direccion: limpio(d.clienteDireccion), notas: limpio(d.notas),
-    subtotal: 0, envio: Number(d.envio || 0), total: 0, pagado: false, pagado_en: null, referencia_pago: null, estado: "pendiente",
-    entregado_en: null, anulado_en: null, motivo_anulacion: null, creado_en: cuando, creado_por: EMAIL,
+    subtotal: 0, envio: Number(d.envio || 0), total: 0, estado: "pendiente", factura_id: null, facturado_en: null,
+    anulado_en: null, motivo_anulacion: null, creado_en: cuando, creado_por: EMAIL,
   };
   db.apartados.push(ap);
   for (const a of articulos) {
@@ -164,25 +164,82 @@ function buscarApartado(db, id) {
   const ap = db.apartados.find((a) => a.id === id) || falla("El apartado no existe");
   return ap;
 }
-function pagar(db, id, pagado, referencia, cuando = ahora()) {
-  const ap = buscarApartado(db, id);
-  if (ap.estado === "anulado") falla("El apartado está anulado");
-  ap.pagado = !!pagado;
-  ap.pagado_en = pagado ? ap.pagado_en || cuando : null;
-  ap.referencia_pago = pagado ? limpio(referencia) : null;
-  return apartadoCon(db, ap);
+// Factura de contado: directa (resta del inventario) o desde un apartado (ya restó al apartarse)
+const facturaCon = (db, f) => ({ ...f, articulos: db.facturaArticulos.filter((a) => a.factura_id === f.id), apartado: f.apartado_id ? (() => { const ap = db.apartados.find((a) => a.id === f.apartado_id); return ap ? { id: ap.id, numero: ap.numero } : null; })() : null });
+function facturar(db, d, cuando = ahora()) {
+  if (!limpio(d.clienteNombre)) falla("Escriba el nombre del cliente");
+  if (Number(d.envio || 0) < 0) falla("Revise el monto del envío");
+  if (Number(d.descuento || 0) < 0) falla("Revise el descuento");
+  db.facturas ||= []; db.facturaArticulos ||= [];
+  let ap = null;
+  const articulos = d.articulos || [];
+  if (d.apartadoId) {
+    ap = buscarApartado(db, d.apartadoId);
+    if (ap.estado !== "pendiente") falla(`Ese apartado ya está ${ap.estado}`);
+  } else {
+    if (!articulos.length) falla("Agregue al menos un artículo");
+    if (articulos.some((a) => !(Number(a.cantidad) > 0) || Number(a.precio_unitario) < 0)) falla("Revise las cantidades y los precios");
+    const suma = {};
+    for (const a of articulos) suma[a.producto_id] = (suma[a.producto_id] || 0) + Number(a.cantidad);
+    for (const [id, cant] of Object.entries(suma)) {
+      const p = producto(db, id) || falla("Uno de los artículos ya no existe");
+      if (p.existencias < cant) falla(`Solo quedan ${p.existencias} de «${p.nombre}»${p.talla ? " talla " + p.talla : ""}`);
+    }
+  }
+  const f = {
+    id: uuid(), numero: "FC-" + pad(siguiente(db, "factura"), 4), token: uuid(), apartado_id: ap ? ap.id : null,
+    cliente_nombre: limpio(d.clienteNombre), cliente_telefono: limpio(d.clienteTelefono), cliente_direccion: limpio(d.clienteDireccion), notas: limpio(d.notas),
+    subtotal: 0, envio: Number(d.envio || 0), descuento: Number(d.descuento || 0), total: 0, forma_pago: limpio(d.formaPago), referencia_pago: limpio(d.referenciaPago),
+    estado: "emitida", anulada_en: null, motivo_anulacion: null, creado_en: cuando, creado_por: EMAIL,
+  };
+  db.facturas.push(f);
+  if (ap) {
+    for (const a of db.articulos.filter((x) => x.apartado_id === ap.id)) {
+      db.facturaArticulos.push({ id: uuid(), factura_id: f.id, producto_id: a.producto_id, nombre: a.nombre, talla: a.talla, color: a.color, cantidad: a.cantidad, precio_unitario: a.precio_unitario, costo_unitario: a.costo_unitario, subtotal: a.cantidad * a.precio_unitario });
+      f.subtotal += a.cantidad * a.precio_unitario;
+    }
+    Object.assign(ap, { estado: "facturado", factura_id: f.id, facturado_en: cuando });
+    db.movimientos.filter((m) => m.apartado_id === ap.id && m.motivo === "apartado").forEach((m) => { m.factura_id = f.id; });
+  } else {
+    for (const a of articulos) {
+      const p = producto(db, a.producto_id);
+      const cantidad = Number(a.cantidad);
+      const precio = a.precio_unitario != null ? Number(a.precio_unitario) : p.precio_venta;
+      p.existencias -= cantidad; p.actualizado_en = cuando;
+      db.facturaArticulos.push({ id: uuid(), factura_id: f.id, producto_id: p.id, nombre: p.nombre, talla: p.talla, color: p.color, cantidad, precio_unitario: precio, costo_unitario: p.costo, subtotal: cantidad * precio });
+      mover(db, { producto_id: p.id, tipo: "salida", motivo: "factura", cantidad, existencias_despues: p.existencias, precio_unitario: precio, referencia: f.numero, factura_id: f.id }, cuando);
+      f.subtotal += cantidad * precio;
+    }
+  }
+  f.total = f.subtotal + f.envio - f.descuento;
+  return facturaCon(db, f);
 }
-function entregar(db, id, entregado, cuando = ahora()) {
-  const ap = buscarApartado(db, id);
-  if (ap.estado === "anulado") falla("El apartado está anulado");
-  ap.estado = entregado ? "entregado" : "pendiente";
-  ap.entregado_en = entregado ? ap.entregado_en || cuando : null;
-  return apartadoCon(db, ap);
+function anularFactura(db, id, motivo, cuando = ahora()) {
+  const f = (db.facturas || []).find((x) => x.id === id) || falla("La factura no existe");
+  if (f.estado === "anulada") falla("La factura ya estaba anulada");
+  for (const a of db.facturaArticulos.filter((x) => x.factura_id === id)) {
+    const p = producto(db, a.producto_id);
+    p.existencias += a.cantidad; p.activo = true;
+    mover(db, { producto_id: p.id, tipo: "entrada", motivo: "anulacion", cantidad: a.cantidad, existencias_despues: p.existencias, precio_unitario: a.precio_unitario, referencia: f.numero, factura_id: f.id, nota: limpio(motivo) }, cuando);
+  }
+  if (f.apartado_id) {
+    const ap = db.apartados.find((x) => x.id === f.apartado_id);
+    if (ap) Object.assign(ap, { estado: "anulado", anulado_en: cuando, motivo_anulacion: limpio(motivo) || "Factura anulada" });
+  }
+  Object.assign(f, { estado: "anulada", anulada_en: cuando, motivo_anulacion: limpio(motivo) });
+  return facturaCon(db, f);
+}
+function nuevoGasto(db, d, cuando = ahora()) {
+  if (!limpio(d.descripcion)) falla("Escriba en qué se gastó");
+  if (!(Number(d.monto) > 0)) falla("Escriba el monto del gasto");
+  const g = { id: uuid(), numero: "GA-" + pad(siguiente(db, "gasto"), 4), fecha: d.fecha || cuando.slice(0, 10), categoria: d.categoria || "otro", descripcion: d.descripcion.trim(), monto: Number(d.monto), pagado_con: limpio(d.pagadoCon), nota: limpio(d.nota), creado_en: cuando, creado_por: EMAIL };
+  (db.gastos ||= []).push(g);
+  return g;
 }
 function anular(db, id, motivo, cuando = ahora()) {
   const ap = buscarApartado(db, id);
   if (ap.estado === "anulado") falla("El apartado ya estaba anulado");
-  if (ap.estado === "entregado") falla("El apartado ya se entregó; si le devolvieron algo, regístrelo como ingreso");
+  if (ap.estado === "facturado") falla("El apartado ya se facturó; anule la factura si hace falta");
   for (const a of db.articulos.filter((x) => x.apartado_id === id)) {
     const p = producto(db, a.producto_id);
     p.existencias += a.cantidad;
@@ -196,7 +253,7 @@ function anular(db, id, motivo, cuando = ahora()) {
 // ---------- Datos de ejemplo ----------
 function sembrar() {
   const db = {
-    seq: {}, productos: [], ingresos: [], apartados: [], articulos: [], movimientos: [], compras: [], proveedores: [],
+    seq: {}, productos: [], ingresos: [], apartados: [], articulos: [], movimientos: [], compras: [], proveedores: [], facturas: [], facturaArticulos: [], gastos: [],
     ajustes: {
       id: 1, nombre_tienda: "Myle Store", whatsapp: "8000-0000", instagram: "", sinpe_movil: "8000-0000",
       sinpe_a_nombre: "Nombre de la dueña", banco: "Banco de ejemplo", cuenta_iban: "CR00 0000 0000 0000 0000 00",
@@ -226,13 +283,14 @@ function sembrar() {
   ingreso({ productoId: top.producto_id, cantidad: 4, costo: 3000, precio: 7900, nota: "Reposición" }, 3);
 
   const ap1 = apartar(db, { clienteNombre: "Sofía Jiménez", clienteTelefono: "88001122", clienteDireccion: "Retira en casa", articulos: [{ producto_id: conjunto.producto_id, cantidad: 2 }] }, dia(9, 15));
-  pagar(db, ap1.id, true, "SINPE 4471", dia(8, 11));
-  entregar(db, ap1.id, true, dia(7, 17));
+  facturar(db, { clienteNombre: "Sofía Jiménez", clienteTelefono: "88001122", clienteDireccion: "Retira en casa", apartadoId: ap1.id, formaPago: "SINPE Móvil", referenciaPago: "4471" }, dia(7, 17));
+  facturar(db, { clienteNombre: "Carolina Mena", clienteTelefono: "86001010", articulos: [{ producto_id: camisa.producto_id, cantidad: 1 }], formaPago: "Efectivo" }, dia(1, 11));
+  nuevoGasto(db, { descripcion: "Cinta y bolsas de empaque", monto: 4500, categoria: "empaque", pagadoCon: "Efectivo" }, dia(6, 10));
+  nuevoGasto(db, { descripcion: "Gasolina para entregas", monto: 8000, categoria: "transporte", pagadoCon: "SINPE Móvil" }, dia(2, 18));
   const ap2 = apartar(db, { clienteNombre: "Daniela Vargas", clienteTelefono: "87654321", clienteDireccion: "Alajuela centro · envío por Correos", envio: 2500, articulos: [{ producto_id: jeans.producto_id, cantidad: 1 }, { producto_id: blusaS.producto_id, cantidad: 1 }] }, dia(5, 13));
-  sacar(db, { productoId: camisa.producto_id, cantidad: 1, motivo: "venta", nota: "Venta a una vecina" }, dia(4, 16));
+  sacar(db, { productoId: camisa.producto_id, cantidad: 1, motivo: "regalo", nota: "Regalo de cumpleaños" }, dia(4, 16));
   sacar(db, { productoId: blusaM.producto_id, cantidad: 1, motivo: "danado", nota: "Mancha en la manga" }, dia(3, 10));
   const ap3 = apartar(db, { clienteNombre: "María Fernanda Rojas", clienteTelefono: "88881234", clienteDireccion: "Heredia, San Pablo · mensajero", envio: 2000, articulos: [{ producto_id: vestido.producto_id, cantidad: 1 }, { producto_id: top.producto_id, cantidad: 2, precio_unitario: 7000 }] }, dia(2, 19));
-  pagar(db, ap3.id, true, "SINPE 9032", dia(1, 9));
   apartar(db, { clienteNombre: "Valeria Mora", clienteTelefono: "60123456", articulos: [{ producto_id: blusaM.producto_id, cantidad: 1 }, { producto_id: enagua.producto_id, cantidad: 1 }] }, dia(0, 9));
   return db;
 }
@@ -332,9 +390,24 @@ export const datosDemo = {
     return ap ? apartadoCon(db, ap) : null;
   }),
   crearApartado: (d) => cambiar((db) => apartar(db, d)),
-  marcarPago: (id, pagado, referencia) => cambiar((db) => pagar(db, id, pagado, referencia)),
-  marcarEntrega: (id, entregado) => cambiar((db) => entregar(db, id, entregado)),
   anularApartado: (id, motivo) => cambiar((db) => anular(db, id, motivo)),
+  facturas: () => consultar((db) => (db.facturas || []).slice().sort((a, b) => b.creado_en.localeCompare(a.creado_en)).map((f) => facturaCon(db, f))),
+  factura: (id) => consultar((db) => { const f = (db.facturas || []).find((x) => x.id === id); return f ? facturaCon(db, f) : null; }),
+  crearFactura: (d) => cambiar((db) => facturar(db, d)),
+  anularFactura: (id, motivo) => cambiar((db) => anularFactura(db, id, motivo)),
+  editarFactura: (id, cambios) => cambiar((db) => {
+    const f = (db.facturas || []).find((x) => x.id === id) || falla("La factura no existe");
+    if (cambios.cliente_nombre !== undefined && !limpio(cambios.cliente_nombre)) falla("Escriba el nombre del cliente");
+    return facturaCon(db, Object.assign(f, cambios));
+  }),
+  gastos: () => consultar((db) => (db.gastos || []).slice().sort((a, b) => b.fecha.localeCompare(a.fecha) || b.creado_en.localeCompare(a.creado_en))),
+  crearGasto: (d) => cambiar((db) => nuevoGasto(db, d)),
+  editarGasto: (id, cambios) => cambiar((db) => {
+    const g = (db.gastos || []).find((x) => x.id === id) || falla("El gasto no existe");
+    if (cambios.monto !== undefined && !(Number(cambios.monto) > 0)) falla("Escriba el monto del gasto");
+    return Object.assign(g, cambios, cambios.monto !== undefined ? { monto: Number(cambios.monto) } : {});
+  }),
+  borrarGasto: (id) => cambiar((db) => { db.gastos = (db.gastos || []).filter((x) => x.id !== id); return true; }),
   editarApartado: (id, cambios) => cambiar((db) => {
     const ap = buscarApartado(db, id);
     if (cambios.cliente_nombre !== undefined && !limpio(cambios.cliente_nombre)) falla("Escriba el nombre del cliente");
@@ -344,17 +417,13 @@ export const datosDemo = {
     return apartadoCon(db, ap);
   }),
   facturaPublica: (token) => consultar((db) => {
-    const ap = db.apartados.find((a) => a.token === token);
-    if (!ap) return null;
+    const f = (db.facturas || []).find((x) => x.token === token);
+    if (!f) return null;
     const { id, ...tienda } = db.ajustes;
     return {
       tienda,
-      apartado: {
-        numero: ap.numero, cliente_nombre: ap.cliente_nombre, cliente_telefono: ap.cliente_telefono, cliente_direccion: ap.cliente_direccion,
-        subtotal: ap.subtotal, envio: ap.envio, total: total(ap), pagado: ap.pagado, pagado_en: ap.pagado_en, estado: ap.estado,
-        entregado_en: ap.entregado_en, creado_en: ap.creado_en,
-      },
-      articulos: db.articulos.filter((a) => a.apartado_id === ap.id).map(({ nombre, talla, color, foto_path, cantidad, precio_unitario, subtotal }) => ({ nombre, talla, color, foto_path, cantidad, precio_unitario, subtotal })),
+      factura: { numero: f.numero, cliente_nombre: f.cliente_nombre, cliente_telefono: f.cliente_telefono, cliente_direccion: f.cliente_direccion, subtotal: f.subtotal, envio: f.envio, descuento: f.descuento, total: f.total, forma_pago: f.forma_pago, estado: f.estado, creado_en: f.creado_en },
+      articulos: db.facturaArticulos.filter((a) => a.factura_id === f.id).map(({ nombre, talla, color, cantidad, precio_unitario, subtotal }) => ({ nombre, talla, color, cantidad, precio_unitario, subtotal })),
     };
   }),
 

@@ -1,9 +1,9 @@
-// Inventario: las prendas con su foto, talla, color, precio y cuántas quedan; la ficha de cada una con su historial
+// Inventario: las prendas con su talla, color, precio y cuántas quedan; la ficha de cada una con su historial
 import { datos } from "../datos.js";
 import { estado, cargarProductos, ir } from "../estado.js";
-import { el, icono, dinero, talla, tela, sinTildes, abrirHoja, avisar, mensajeError, trabajando, comprimirFoto, campoDinero, numero, confirmar,
+import { el, icono, dinero, talla, tela, colorTela, sinTildes, abrirHoja, avisar, mensajeError, trabajando, campoDinero, numero, confirmar,
   CATEGORIAS_COMUNES, COLORES_COMUNES } from "../util.js";
-import { fotoProducto, renglonMovimiento, botonesFoto, verEtiqueta, vacio } from "../componentes.js";
+import { renglonMovimiento, verEtiqueta, vacio } from "../componentes.js";
 
 const filtro = { texto: "", categoria: "", agotados: true, ocultos: false };
 
@@ -43,7 +43,7 @@ export async function vistaInventario(pagina, ctx) {
       el("span", "valor de venta ", el("b", dinero(v))));
 
     if (!estado.productos.length) {
-      rejilla.replaceChildren(vacio("percha", "Todavía no hay productos.", "Cada producto entra con su primer ingreso: foto, cantidad y precios.",
+      rejilla.replaceChildren(vacio("percha", "Todavía no hay productos.", "Cada producto entra con su primer ingreso: talla, color, cantidad y precios.",
         el("a.btn.primario", { href: "#/ingresos" }, icono("ingreso"), "Registrar el primer ingreso")));
       return;
     }
@@ -54,13 +54,16 @@ export async function vistaInventario(pagina, ctx) {
     rejilla.replaceChildren(...lista.map(tarjeta));
   };
 
+  // Tarjeta sin foto: una franja con el color de la prenda, la talla grande y el precio colgante
   const tarjeta = (p) => {
     const stock = p.existencias === 0 ? ".cero" : p.existencias <= 2 ? ".poco" : "";
-    return el("button.prenda" + (p.existencias === 0 ? ".agotada" : ""), { type: "button", onclick: () => abrirFicha(p.id, { alCambiar: () => { pintarChips(); pintar(); } }) },
-      el("div.prenda-foto", fotoProducto(p, "foto"), el("span.precio-colgante", dinero(p.precio_venta))),
+    const c = colorTela(p.color);
+    return el("button.prenda" + (p.existencias === 0 ? ".agotada" : ""), { type: "button", ...(c ? { style: `--tela:${c}` } : {}), onclick: () => abrirFicha(p.id, { alCambiar: () => { pintarChips(); pintar(); } }) },
+      el("div.prenda-tela"),
+      el("div.prenda-cabeza", talla(p.talla, "grande") || el("span"), el("span.precio-colgante", dinero(p.precio_venta))),
       el("div.prenda-info",
         el("div.prenda-nombre", p.nombre),
-        el("div.prenda-meta", talla(p.talla), tela(p.color)),
+        el("div.prenda-meta", tela(p.color), p.categoria ? el("span", p.categoria) : null),
         el("div.prenda-stock" + stock,
           p.existencias === 0 ? el("span", "Agotado") : [el("b", p.existencias), el("span", p.existencias === 1 ? "disponible" : "disponibles")])));
   };
@@ -103,29 +106,12 @@ export async function abrirFicha(id, { alCambiar } = {}) {
     pintar();
   };
 
-  const cambiarFoto = async (archivo) => {
-    if (!archivo) return;
-    try {
-      const ruta = await datos.subirFoto(await comprimirFoto(archivo));
-      await datos.guardarProducto(id, { foto_path: ruta });
-      avisar("Foto actualizada");
-      await refrescar();
-    } catch (e) {
-      avisar(mensajeError(e), "error");
-    }
-  };
-
   const linea = (et, val, clase = "") => el("div.linea", el("span.et", et), el("span.puntos"), el("span.val" + clase, val));
 
   const pintar = (modo) => {
     if (modo !== undefined) editando = modo;
     const ganancia = Number(p.precio_venta) - Number(p.costo);
     const margen = Number(p.precio_venta) > 0 ? Math.round((ganancia / Number(p.precio_venta)) * 100) : 0;
-    const foto = el("label.ficha-foto", { title: "Cambiar foto" },
-      fotoProducto(p, "foto"),
-      el("input", { type: "file", accept: "image/*", class: "oculto", onchange: (e) => cambiarFoto(e.target.files[0]) }),
-      el("span.cambiar-foto", icono("camara", "chico"), "Cambiar foto"));
-
     const info = editando ? formularioEdicion() : el("div",
       el("div.ficha-cabeza",
         el("div",
@@ -158,7 +144,7 @@ export async function abrirFicha(id, { alCambiar } = {}) {
         : movimientos.length ? el("div.lista", movimientos.map((m) => renglonMovimiento(m, { mostrarProducto: false })))
           : vacio("caja", "Sin movimientos."));
 
-    cuerpo.replaceChildren(el("div.ficha", el("div.columna-foto", foto, botonesFoto(cambiarFoto, { chico: true })), info), etiquetas, historial);
+    cuerpo.replaceChildren(el("div.ficha", info), etiquetas, historial);
   };
 
   const formularioEdicion = () => {

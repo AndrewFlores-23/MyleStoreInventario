@@ -132,14 +132,13 @@ const ESCENAS = [
   },
   {
     titulo: "Registrar cada prenda", dur: 11000,
-    texto: "Cada prenda entra con <b>foto, cantidad, costo y precio de venta</b>. Al guardar recibe su <b>etiqueta de serie</b>, que se puede imprimir y volver a ver desde la ficha.",
+    texto: "Cada prenda entra con <b>cantidad, costo y precio de venta</b>. Al guardar recibe su <b>etiqueta de serie</b>, que se puede imprimir y volver a ver desde la ficha.",
     armar() {
       const nombre = campo("Nombre del producto", "", "Ej.: Blusa de lino");
       pantalla.replaceChildren(...marco("Movimientos",
         el("div.p-titulo.aparece", "Registrar prenda"),
         el("div.p-franja.pendiente.aparece", el("span", "⬇"), el("div", el("b", "Compra CO-0001 · Mayorista San José"), "0 de 7 registradas · faltan 7")),
         el("div.p-panel.aparece-2",
-          el("div.p-foto.rosa", { style: "width:100%;height:70px;border-radius:8px;margin-bottom:8px" }),
           nombre,
           el("div.p-rejilla", campo("Talla", "M"), campo("Cantidad", "4")),
           el("div.p-rejilla", campo("Costo", "₡6.500"), campo("Precio de venta", "₡14.900")),
@@ -156,7 +155,7 @@ const ESCENAS = [
   },
   {
     titulo: "El inventario", dur: 8000,
-    texto: "El <b>inventario</b> muestra lo que hay para vender: foto, talla, color, precio y cuántas quedan. Tocando una prenda se ve su ficha, sus etiquetas y todo su historial.",
+    texto: "El <b>inventario</b> muestra lo que hay para vender: talla, color, precio y cuántas quedan. Tocando una prenda se ve su ficha, sus etiquetas y todo su historial.",
     armar() {
       const prenda = (color, nombre, talla, precio, quedan, poco) => el("div.p-prenda", el("div.p-foto." + color), el("div", el("b", nombre), `${talla} · ${precio}`, el("br"), el(poco ? "small" : "span", { style: poco ? "" : "color:var(--texto-2)" }, `${quedan} disponibles`)));
       pantalla.replaceChildren(...marco("Inventario",
@@ -172,7 +171,7 @@ const ESCENAS = [
   },
   {
     titulo: "Armar un apartado", dur: 11000,
-    texto: "Cuando un cliente pide, se arma el <b>apartado</b>: se buscan las prendas y se escriben sus datos. Al crearlo, las prendas se <b>restan del inventario</b> y sale la factura.",
+    texto: "Cuando un cliente pide y todavía no paga, se arma el <b>apartado</b>: se buscan las prendas y se escriben sus datos. Las prendas se <b>restan del inventario</b> y quedan guardadas para él.",
     armar() {
       const cliente = campo("Nombre", "", "Nombre y apellido");
       pantalla.replaceChildren(...marco("Apartados",
@@ -181,56 +180,48 @@ const ESCENAS = [
           renglon("rosa", "Blusa de lino manga corta", "M · Blanco", "₡14.900"),
           renglon("verde", "Vestido midi floral", "M · Estampado", "₡24.900")),
         el("div.p-panel.aparece-3", el("h4", "Cliente"), cliente, campo("WhatsApp", "8800-1122"),
-          el("div.p-recibo", linea("Subtotal", "₡39.800"), linea("Envío", "₡2.500"), linea("Total a pagar", "₡42.300", true)),
-          boton("Crear apartado y factura"))));
+          el("div.p-recibo", linea("Subtotal", "₡39.800"), linea("Envío", "₡2.500"), linea("Total", "₡42.300", true)),
+          boton("Apartar prendas"))));
       luego(1800, () => teclear(cliente.lastChild, "Sofía Jiménez", 60));
       luego(3600, () => pantalla.querySelector(".p-boton").classList.add("pulsa"));
       luego(4400, () => {
         pantalla.replaceChildren(...marco("Apartados",
           el("div.p-titulo.aparece", "Sofía Jiménez"),
-          el("div.p-franja.pendiente.aparece", el("span", "💳"), el("div", el("b", "Pendiente de pago · ₡42.300"), "2 prendas · apartado hoy")),
-          el("div.p-panel.aparece-2", boton("WhatsApp a 8800-1122"), el("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px" }, boton("Compartir", ".suave"), boton("Guardar PDF", ".suave"))),
-          el("div.p-factura.aparece-3", logo(), el("div.t", "Factura de apartado"),
-            el("div.cliente", el("b", "Sofía Jiménez"), el("br"), "AP-0001 · 2 prendas · ₡42.300"),
-            el("div", { style: "margin-top:6px;font-size:10.5px;color:var(--texto-2)" }, "SINPE Móvil 8000-0000 · a nombre de la tienda"),
-            el("div.p-sello-grande.pendiente", "Pendiente"))));
+          el("div.p-franja.pendiente.aparece", el("span", "🛍"), el("div", el("b", "Apartado · ₡42.300"), "2 prendas · pendiente de facturar")),
+          el("div.p-panel.aparece-2", el("h4", "¿Ya pagó?"), boton("Pasar a facturación")),
+          el("div.p-panel.aparece-3", el("h4", "Avisar al cliente"), boton("WhatsApp a 8800-1122", ".suave"))));
         pantalla.append(toast("Apartado AP-0001 creado"));
       });
     },
   },
   {
-    titulo: "Pagar, entregar y salidas", dur: 11000,
-    texto: "Cuando el cliente paga se marca <b>Cancelado</b>; cuando recibe, <b>Entregado</b>. Lo que sale sin apartado (venta directa, dañado, devolución) se anota en <b>Salidas</b>, y todo queda en <b>Movimientos</b>.",
+    titulo: "Facturar, gastos y movimientos", dur: 12000,
+    texto: "Cuando el cliente paga, se emite la <b>factura de contado</b> (directa o desde el apartado) y se le envía. Los <b>gastos</b> del negocio se anotan aparte, y todo queda en <b>Movimientos</b>.",
     armar() {
-      const pago = el("div.p-paso", el("span.marca", "1"), el("div", el("b", "Pendiente de pago"), el("small", "Falta cobrar ₡42.300")), boton("Marcar pagado").cloneNode(true));
-      const entrega = el("div.p-paso", el("span.marca", "2"), el("div", el("b", "Por entregar"), el("small", "2 prendas apartadas")), boton("Marcar entregado", ".suave"));
+      const forma = campo("Forma de pago", "SINPE Móvil");
       pantalla.replaceChildren(...marco("Apartados",
-        el("div.p-titulo.aparece", "Sofía Jiménez"),
-        el("div.p-franja.pendiente.aparece", { id: "franja" }, el("span", "💳"), el("div", el("b", "Pendiente de pago · ₡42.300"), "2 prendas · apartado hoy")),
-        el("div.aparece-2", { style: "display:flex;flex-direction:column;gap:8px" }, pago, entrega)));
-      luego(1500, () => pago.querySelector(".p-boton").classList.add("pulsa"));
-      luego(2200, () => {
-        pago.classList.add("hecho"); pago.querySelector(".marca").textContent = "✓";
-        pago.querySelector("b").textContent = "Cancelado"; pago.querySelector("small").textContent = "5 nov 2026 · SINPE 4471";
-        pago.querySelector(".p-boton").replaceWith(el("span.p-sello.pagado", "Pagado"));
-        const f = pantalla.querySelector("#franja"); f.className = "p-franja listo"; f.querySelector("b").textContent = "Pagado · listo para entregar";
-      });
-      luego(3800, () => entrega.querySelector(".p-boton").classList.add("pulsa"));
-      luego(4500, () => {
-        entrega.classList.add("hecho"); entrega.querySelector(".marca").textContent = "✓";
-        entrega.querySelector("b").textContent = "Entregado"; entrega.querySelector("small").textContent = "5 nov 2026";
-        entrega.querySelector(".p-boton").remove();
-        const f = pantalla.querySelector("#franja"); f.querySelector("b").textContent = "Vendido · ₡42.300"; f.lastChild.lastChild.textContent = "Entregado el 5 nov 2026 · 2 prendas";
-        pantalla.append(toast("Marcado como entregado"));
+        el("div.p-titulo.aparece", "Nueva factura"),
+        el("div.p-franja.pendiente.aparece", el("span", "🛍"), el("div", el("b", "Del apartado AP-0001"), "2 prendas · ₡42.300")),
+        el("div.p-panel.aparece-2", el("h4", "Cliente y pago"), campo("Nombre", "Sofía Jiménez"), forma, boton("Emitir factura"))));
+      luego(2000, () => pantalla.querySelector(".p-boton").classList.add("pulsa"));
+      luego(2800, () => {
+        pantalla.replaceChildren(...marco("Apartados",
+          el("div.p-titulo.aparece", "Sofía Jiménez"),
+          el("div.p-franja.listo.aparece", el("span", "✓"), el("div", el("b", "Cobrado · ₡42.300"), "2 prendas · SINPE Móvil")),
+          el("div.p-panel.aparece-2", boton("WhatsApp a 8800-1122"), el("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px" }, boton("Compartir", ".suave"), boton("Imprimir / PDF", ".suave"))),
+          el("div.p-factura.aparece-3", logo(), el("div.t", "Factura de contado"),
+            el("div.cliente", el("b", "Sofía Jiménez"), el("br"), "FC-0001 · 2 prendas · ₡42.300"),
+            el("div.p-sello-grande.cancelado", "Cancelado"))));
+        pantalla.append(toast("Factura FC-0001 emitida"));
       });
       luego(6800, () => {
         pantalla.replaceChildren(...marco("Movimientos",
           el("div.p-titulo.aparece", "Movimientos"),
           el("div", { class: "aparece", style: "font-size:11px;color:var(--texto-3);font-weight:700;letter-spacing:.08em" }, "5 NOV 2026"),
           el("div.p-panel.aparece-2",
-            renglon("rosa", "Blusa de lino manga corta", "Apartado · Sofía Jiménez", "−1", "quedan 3"),
-            renglon("verde", "Vestido midi floral", "Apartado · Sofía Jiménez", "−1", "quedan 2"),
-            renglon("azul", "Jeans tiro alto", "Venta directa", "−1", "quedan 4"),
+            renglon("rosa", "Blusa de lino manga corta", "Factura FC-0001 · Sofía Jiménez", "−1", "quedan 3"),
+            renglon("verde", "Vestido midi floral", "Factura FC-0001 · Sofía Jiménez", "−1", "quedan 2"),
+            renglon("azul", "Jeans tiro alto", "Gasto · Gasolina para entregas", "", "−₡8.000"),
             renglon("beige", "Enagua plisada", "Dañado o defectuoso", "−1", "quedan 0"),
             renglon("rosa", "Blusa de lino manga corta", "Ingreso · MS-00001", "+4", "quedan 4"))));
       });

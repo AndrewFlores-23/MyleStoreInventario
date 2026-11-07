@@ -18,20 +18,18 @@ async function mostrar() {
     const f = await datos.facturaPublica(token);
     if (!f) return problema("No encontramos esta factura.");
     ponerMoneda(f.tienda?.moneda);
-    const { tienda, apartado: ap, articulos } = f;
-    document.title = `Factura ${ap.numero} · ${tienda?.nombre_tienda || "Myle Store"}`;
-    const hoja = armarFactura({ tienda, apartado: ap, articulos, urlFoto: (r) => datos.urlFoto(r) });
+    const { tienda, factura: fc, articulos } = f;
+    document.title = `Factura ${fc.numero} · ${tienda?.nombre_tienda || "Myle Store"}`;
+    const hoja = armarFactura({ tienda, factura: fc, articulos });
     const tel = telefonoWa(tienda?.whatsapp);
-    const texto = encodeURIComponent(ap.pagado
-      ? `Hola, le escribo por mi apartado ${ap.numero}.`
-      : `Hola, le envío el comprobante de pago del apartado ${ap.numero}.`);
+    const texto = encodeURIComponent(`Hola, le escribo por mi factura ${fc.numero}.`);
     caja.replaceChildren(
       hoja,
       el("div.acciones-publicas",
-        ap.estado !== "anulado" && tel
-          ? el("a.btn.primario.grande", { href: `https://wa.me/${tel}?text=${texto}`, target: "_blank", rel: "noopener" }, icono("chat"), ap.pagado ? "Escribir a la tienda" : "Enviar comprobante por WhatsApp")
+        fc.estado !== "anulada" && tel
+          ? el("a.btn.primario.grande", { href: `https://wa.me/${tel}?text=${texto}`, target: "_blank", rel: "noopener" }, icono("chat"), "Escribir a la tienda")
           : null,
-        el("button.btn.grande", { type: "button", onclick: async () => { const r = await compartirFactura({ titulo: document.title, texto: `${ap.pagado ? "Recibo" : "Factura"} ${ap.numero} · ${tienda?.nombre_tienda || "Myle Store"}`, enlace: location.href }); if (r === "copiado") avisar("Enlace copiado"); } }, icono("compartir"), "Compartir"),
+        el("button.btn.grande", { type: "button", onclick: async () => { const r = await compartirFactura({ titulo: document.title, texto: `Factura ${fc.numero} · ${tienda?.nombre_tienda || "Myle Store"}`, enlace: location.href }); if (r === "copiado") avisar("Enlace copiado"); } }, icono("compartir"), "Compartir"),
         el("button.btn.grande", { type: "button", onclick: () => imprimirFactura(hoja, document.title) }, icono("imprimir"), "Guardar o imprimir")));
   } catch (e) {
     console.error(e);

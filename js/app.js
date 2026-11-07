@@ -8,6 +8,8 @@ import { vistaIngresos } from "./vistas/ingresos.js";
 import { vistaSalidas } from "./vistas/salidas.js";
 import { vistaApartados } from "./vistas/apartados.js";
 import { vistaMovimientos } from "./vistas/movimientos.js";
+import { vistaFacturacion } from "./vistas/facturacion.js";
+import { vistaGastos } from "./vistas/gastos.js";
 import { vistaAjustes } from "./vistas/ajustes.js";
 
 // El tipo de enlace (recuperar contraseña) se lee antes de que Supabase limpie la dirección
@@ -21,8 +23,10 @@ const SECCIONES = [
   { ruta: "inventario", titulo: "Inventario", icono: "percha", vista: vistaInventario },
   { ruta: "ingresos", titulo: "Ingresos", icono: "ingreso", vista: vistaIngresos, soloLateral: true },
   { ruta: "salidas", titulo: "Salidas", icono: "salida", vista: vistaSalidas, soloLateral: true },
-  { ruta: "movimientos", titulo: "Movimientos", icono: "caja", vista: vistaMovimientos },
   { ruta: "apartados", titulo: "Apartados", icono: "bolsa", vista: vistaApartados },
+  { ruta: "facturacion", titulo: "Facturación", icono: "billete", vista: vistaFacturacion },
+  { ruta: "movimientos", titulo: "Movimientos", icono: "caja", vista: vistaMovimientos },
+  { ruta: "gastos", titulo: "Gastos", icono: "gasto", vista: vistaGastos, soloLateral: true },
   { ruta: "ajustes", titulo: "Ajustes", icono: "ajustes", vista: vistaAjustes, soloLateralYMovil: true },
 ];
 
@@ -163,9 +167,11 @@ function armarMarco() {
 function menuRegistrar() {
   hojaAcciones("¿Qué desea registrar?", [
     { icono: "caja", titulo: "Compra de mercadería", detalle: "El pedido al proveedor: cuántas prendas y cuánto pagó", alElegir: () => { location.hash = "#/movimientos/compras/nueva"; } },
-    { icono: "ingreso", titulo: "Ingreso de prenda", detalle: "Prenda nueva o reposición, con foto y serie", alElegir: () => { location.hash = "#/ingresos"; } },
-    { icono: "bolsa", titulo: "Nuevo apartado", detalle: "Arma el pedido y genera la factura", alElegir: () => { location.hash = "#/apartados/nuevo"; } },
-    { icono: "salida", titulo: "Salida", detalle: "Venta directa, dañado, devolución o ajuste", alElegir: () => { location.hash = "#/salidas"; } },
+    { icono: "ingreso", titulo: "Ingreso de prenda", detalle: "Prenda nueva o reposición, con su serie", alElegir: () => { location.hash = "#/ingresos"; } },
+    { icono: "billete", titulo: "Factura de contado", detalle: "Una venta ya pagada, directa o de un apartado", alElegir: () => { location.hash = "#/facturacion/nueva"; } },
+    { icono: "bolsa", titulo: "Nuevo apartado", detalle: "Aparta las prendas de un pedido sin pagar", alElegir: () => { location.hash = "#/apartados/nuevo"; } },
+    { icono: "gasto", titulo: "Gasto del negocio", detalle: "Cinta, bolsas, gasolina, envíos…", alElegir: () => { location.hash = "#/gastos"; } },
+    { icono: "salida", titulo: "Salida", detalle: "Dañado, devolución, regalo o ajuste", alElegir: () => { location.hash = "#/salidas"; } },
   ]);
 }
 
@@ -178,7 +184,7 @@ function enrutar() {
     return;
   }
   document.querySelectorAll("dialog[open]").forEach((d) => d.close());
-  const rutaPestana = ["ingresos", "salidas"].includes(seccion.ruta) ? "movimientos" : seccion.ruta;
+  const rutaPestana = ["ingresos", "salidas", "gastos"].includes(seccion.ruta) ? "movimientos" : seccion.ruta;
   document.querySelectorAll("[data-ruta]").forEach((a) => {
     const enPestanas = a.closest(".pestanas");
     if (a.dataset.ruta === (enPestanas ? rutaPestana : seccion.ruta)) a.setAttribute("aria-current", "page");

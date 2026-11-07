@@ -1,11 +1,12 @@
-// Apartados: pedido armado para un cliente que todavía no se entrega. Al crearlo, las prendas salen del inventario
-// disponible y queda lista la factura con los datos de depósito. Luego se marca el pago (cancelado) y la entrega.
+// Apartados: el pedido de un cliente que se guarda con sus prendas apartadas (salen del inventario disponible).
+// No lleva factura ni pago: cuando el cliente paga, el apartado se pasa a Facturación y ahí sale la factura de contado.
 import { datos } from "../datos.js";
 import { estado, cargarProductos, ponerPendientes, ir } from "../estado.js";
-import { el, icono, dinero, numero, fecha, fechaHora, hace, talla, tela, sinTildes, telefonoBonito, telefonoWa, campoDinero, contador,
+import { el, icono, dinero, numero, fecha, fechaHora, hace, sinTildes, telefonoBonito, telefonoWa, campoDinero,
   trabajando, avisar, mensajeError, abrirHoja, confirmar } from "../util.js";
-import { fotoProducto, selectorProducto, sellosApartado, cajaDias, unidades, vacio } from "../componentes.js";
-import { armarFactura, textoWhatsApp, enlaceFactura, imprimirFactura, compartirFactura } from "../factura.js";
+import { marcaProducto, sellosApartado, cajaDias, unidades, vacio } from "../componentes.js";
+import { textoApartado } from "../factura.js";
+import { armarPedido, camposCliente } from "./pedido.js";
 
 export function vistaApartados(pagina, ctx) {
   const [primera] = ctx.partes;
@@ -16,13 +17,12 @@ export function vistaApartados(pagina, ctx) {
 
 // ---------- Lista ----------
 const FILTROS = [
-  ["entregar", "Por entregar", (a) => a.estado === "pendiente"],
-  ["cobrar", "Por cobrar", (a) => a.estado !== "anulado" && !a.pagado],
-  ["entregados", "Entregados", (a) => a.estado === "entregado"],
+  ["pendientes", "Apartados", (a) => a.estado === "pendiente"],
+  ["facturados", "Facturados", (a) => a.estado === "facturado"],
   ["anulados", "Anulados", (a) => a.estado === "anulado"],
   ["todos", "Todos", () => true],
 ];
-let filtroLista = "entregar";
+let filtroLista = "pendientes";
 let textoLista = "";
 
 async function vistaLista(_pagina, ctx) {
@@ -43,16 +43,16 @@ async function vistaLista(_pagina, ctx) {
       const texto = sinTildes([a.numero, a.cliente_nombre, a.cliente_telefono, a.cliente_direccion].join(" "));
       return palabras.every((w) => texto.includes(w));
     });
-    if (filtroLista === "entregar") elegidos.sort((a, b) => a.creado_en.localeCompare(b.creado_en));
+    if (filtroLista === "pendientes") elegidos.sort((a, b) => a.creado_en.localeCompare(b.creado_en));
     const monto = elegidos.reduce((s, a) => s + Number(a.total), 0);
     resumen.replaceChildren(
       el("span", el("b", elegidos.length), ` apartado${elegidos.length === 1 ? "" : "s"}`),
       el("span", el("b", unidades(elegidos.flatMap((a) => a.articulos))), " prendas"),
-      el("span", filtroLista === "cobrar" ? "por cobrar " : "total ", el("b", dinero(monto))));
+      el("span", filtroLista === "pendientes" ? "por facturar " : "total ", el("b", dinero(monto))));
     lista.replaceChildren(...(elegidos.length ? elegidos.map(fila) : [
       apartados.length
         ? vacio("bolsa", "No hay apartados aquí.")
-        : vacio("bolsa", "Todavía no hay apartados.", "Cuando un cliente pida, arme el apartado y envíele la factura.",
+        : vacio("bolsa", "Todavía no hay apartados.", "Cuando un cliente pida y todavía no pague, aparte sus prendas aquí.",
           el("a.btn.primario", { href: "#/apartados/nuevo" }, icono("mas"), "Nuevo apartado")),
     ]));
   };
@@ -63,12 +63,12 @@ async function vistaLista(_pagina, ctx) {
       el("div.renglon-titulo", ap.cliente_nombre),
       el("div.renglon-sub", sellosApartado(ap)),
       el("div.renglon-sub.tenue", el("span.numero", ap.numero), `${unidades(ap.articulos)} prendas · ${fecha(ap.creado_en)}`)),
-    el("div.renglon-fin", el("div.num", dinero(ap.total)), el("small", ap.pagado ? "pagado" : ap.estado === "anulado" ? "anulado" : "por cobrar")));
+    el("div.renglon-fin", el("div.num", dinero(ap.total)), el("small", ap.estado === "facturado" ? "facturado" : ap.estado === "anulado" ? "anulado" : "por facturar")));
 
   const buscar = el("input", { type: "search", placeholder: "Buscar cliente, número o teléfono", value: textoLista, oninput: (e) => { textoLista = e.target.value; pintar(); } });
   ctx.pintar(
     el("div.cabeza",
-      el("div", el("h1", "Apartados"), el("p", "Pedidos armados que esperan pago o entrega.")),
+      el("div", el("h1", "Apartados"), el("p", "Pedidos con prendas apartadas que todavía no se facturan.")),
       el("div.acciones", el("a.btn.primario", { href: "#/apartados/nuevo" }, icono("mas"), "Nuevo apartado"))),
     el("div.filtros", el("div.buscar", icono("buscar"), buscar)),
     pestanas,
@@ -80,78 +80,23 @@ async function vistaLista(_pagina, ctx) {
 // ---------- Nuevo apartado ----------
 async function vistaNuevo(_pagina, ctx) {
   await cargarProductos();
-  const carrito = []; // { producto, cantidad, precio }
   const error = el("div.error-form.oculto");
-  const lineas = el("div");
-  const totales = el("div.recibo");
-  const nombre = el("input", { required: true, placeholder: "Nombre y apellido", autocomplete: "off" });
-  const telefono = el("input", { type: "tel", inputmode: "tel", placeholder: "8888-8888", autocomplete: "off" });
-  const direccion = el("input", { placeholder: "Ej.: Heredia, San Pablo · envío por Correos", autocomplete: "off" });
-  const notas = el("textarea", { placeholder: "Solo para la tienda; no sale en la factura" });
-  const envio = campoDinero({ placeholder: "0", oninput: () => pintarTotales() });
-  const envioIn = envio.querySelector("input");
-  const boton = el("button.btn.primario.grande.ancho", { type: "submit" }, icono("check"), "Crear apartado y factura");
-
-  const selector = selectorProducto({
-    soloDisponibles: true,
-    placeholder: "Buscar prenda para agregar",
-    alElegir: (p) => {
-      const ya = carrito.find((l) => l.producto.id === p.id);
-      if (ya) {
-        if (ya.cantidad < p.existencias) ya.cantidad += 1;
-        else avisar(`Solo hay ${p.existencias} de esta prenda`, "error");
-      } else {
-        carrito.push({ producto: p, cantidad: 1, precio: Number(p.precio_venta) });
-      }
-      pintarLineas();
-    },
-  });
-
-  const pintarLineas = () => {
-    lineas.replaceChildren(...(carrito.length ? carrito.map((l, i) => {
-      const sub = el("div.subtotal", dinero(l.cantidad * l.precio));
-      const cuenta = contador({ valor: l.cantidad, min: 1, max: l.producto.existencias, chico: true, alCambiar: (n) => { l.cantidad = n; sub.textContent = dinero(l.cantidad * l.precio); pintarTotales(); } });
-      const precio = campoDinero({ value: l.precio, "aria-label": "Precio por unidad", oninput: (e) => { const v = numero(e.target.value); l.precio = v >= 0 ? v : 0; sub.textContent = dinero(l.cantidad * l.precio); pintarTotales(); } });
-      return el("div.linea-carrito",
-        fotoProducto(l.producto),
-        el("div.info",
-          el("div.renglon-titulo", l.producto.nombre),
-          el("div.renglon-sub", talla(l.producto.talla), tela(l.producto.color), el("span.tenue", `de ${l.producto.existencias} disponibles`))),
-        sub,
-        el("div.controles", cuenta, precio,
-          el("button.btn.fantasma.btn-icono.quitar", { type: "button", "aria-label": "Quitar del pedido", title: "Quitar del pedido", onclick: () => { carrito.splice(i, 1); pintarLineas(); } }, icono("x"))));
-    }) : [vacio("bolsa", "Agregue las prendas que pidió el cliente.", "Búsquelas arriba por nombre, talla o color.")]));
-    pintarTotales();
-  };
-
-  const linea = (et, val, clase = "") => el("div.linea" + clase, el("span.et", et), el("span.puntos"), el("span.val", val));
-  const pintarTotales = () => {
-    const sub = carrito.reduce((s, l) => s + l.cantidad * l.precio, 0);
-    const env = Math.max(0, numero(envioIn.value) || 0);
-    const n = carrito.reduce((s, l) => s + l.cantidad, 0);
-    totales.replaceChildren(
-      linea("Artículos", el("span", n, el("small", n === 1 ? "unidad" : "unidades"))),
-      linea("Subtotal", dinero(sub)),
-      linea("Envío", dinero(env)),
-      linea("Total a pagar", dinero(sub + env), ".total"));
-  };
+  const pedido = armarPedido();
+  const cliente = camposCliente({ telefonoAyuda: "(para avisarle del pedido)" });
+  const boton = el("button.btn.primario.grande.ancho", { type: "submit" }, icono("check"), "Apartar prendas");
 
   const form = el("form.dos-columnas", {
     onsubmit: async (ev) => {
       ev.preventDefault();
       error.classList.add("oculto");
-      const falta = !carrito.length ? "Agregue al menos una prenda." : !nombre.value.trim() ? "Escriba el nombre del cliente." : null;
+      const falta = pedido.vacio() ? "Agregue al menos una prenda." : !cliente.nombre.value.trim() ? "Escriba el nombre del cliente." : null;
       if (falta) {
         error.textContent = falta;
         error.classList.remove("oculto");
         return;
       }
       try {
-        const ap = await trabajando(boton, () => datos.crearApartado({
-          clienteNombre: nombre.value, clienteTelefono: telefono.value, clienteDireccion: direccion.value, notas: notas.value,
-          envio: Math.max(0, numero(envioIn.value) || 0),
-          articulos: carrito.map((l) => ({ producto_id: l.producto.id, cantidad: l.cantidad, precio_unitario: l.precio })),
-        }), "Creando…");
+        const ap = await trabajando(boton, () => datos.crearApartado({ ...cliente.leer(), envio: pedido.envio(), articulos: pedido.articulos() }), "Apartando…");
         await cargarProductos();
         avisar(`Apartado ${ap.numero} creado`);
         ir(`apartados/${ap.id}`);
@@ -162,58 +107,43 @@ async function vistaNuevo(_pagina, ctx) {
       }
     },
   },
-    el("section.panel",
-      el("div.panel-titulo", el("h2", "Prendas del pedido")),
-      selector,
-      el("div.carrito", lineas)),
+    pedido.panelPrendas("Prendas que se apartan"),
     el("section.panel",
       el("div.panel-titulo", el("h2", "Cliente")),
       el("div.pila.media",
-        el("label.campo", el("span", "Nombre"), nombre),
-        el("label.campo", el("span", "Teléfono o WhatsApp ", el("em", "(para enviarle la factura)")), telefono),
-        el("label.campo", el("span", "Dirección o forma de entrega ", el("em", "(opcional)")), direccion),
-        el("label.campo", el("span", "Envío ", el("em", "(opcional)")), envio),
-        el("label.campo", el("span", "Notas internas ", el("em", "(opcional)")), notas),
-        totales,
+        ...cliente.campos,
+        pedido.campoEnvio,
+        cliente.campoNotas,
+        pedido.totales,
         error,
         boton,
-        el("p.tenue", { style: "font-size:13px" }, "Las prendas se apartan en este momento: dejan de estar disponibles para otros clientes."))));
+        el("p.tenue", { style: "font-size:13px" }, "Las prendas se apartan ahora y dejan de estar disponibles. Cuando el cliente pague, pase el apartado a Facturación."))));
 
   ctx.pintar(
     el("a.volver", { href: "#/apartados" }, icono("atras", "chico"), "Apartados"),
-    el("div.cabeza", el("div", el("h1", "Nuevo apartado"), el("p", "Arme el pedido y genere la factura con los datos de depósito."))),
+    el("div.cabeza", el("div", el("h1", "Nuevo apartado"), el("p", "Guarde el pedido con sus prendas apartadas."))),
     form);
-  pintarLineas();
 }
 
-// ---------- Detalle con factura ----------
+// ---------- Detalle ----------
 async function vistaDetalle(_pagina, ctx, id) {
   let ap = await datos.apartado(id);
   if (!ap) {
     ctx.pintar(vacio("bolsa", "Ese apartado no existe.", null, el("a.btn", { href: "#/apartados" }, "Ver apartados")));
     return;
   }
-  const enlace = enlaceFactura(ap.token);
   contarPendientes();
 
-  // Franja con el estado del pedido de un vistazo
   const franja = () => {
     const n = unidades(ap.articulos);
     const prendas = `${n} prenda${n === 1 ? "" : "s"}`;
     if (ap.estado === "anulado") return el("div.franja-estado.anulado", icono("anular"), el("div", el("strong", "Anulado"), el("span", `${fecha(ap.anulado_en)} · ${prendas} de vuelta al inventario`)));
-    if (ap.estado === "entregado" && ap.pagado) return el("div.franja-estado.vendido", icono("check"), el("div", el("strong", `Vendido · ${dinero(ap.total)}`), el("span", `Entregado el ${fecha(ap.entregado_en)} · ${prendas}`)));
-    if (ap.estado === "entregado") return el("div.franja-estado.aviso", icono("billete"), el("div", el("strong", `Entregado · falta cobrar ${dinero(ap.total)}`), el("span", `Entregado el ${fecha(ap.entregado_en)} · ${prendas}`)));
-    if (ap.pagado) return el("div.franja-estado.listo", icono("entrega"), el("div", el("strong", `Pagado · listo para entregar`), el("span", `${dinero(ap.total)} · ${prendas} · apartado ${hace(ap.creado_en)}`)));
-    return el("div.franja-estado.pendiente", icono("billete"), el("div", el("strong", `Pendiente de pago · ${dinero(ap.total)}`), el("span", `${prendas} · apartado ${hace(ap.creado_en)}`)));
+    if (ap.estado === "facturado") return el("div.franja-estado.vendido", icono("check"), el("div", el("strong", `Facturado · ${dinero(ap.total)}`), el("span", `Factura ${ap.factura?.numero || ""} · ${fecha(ap.facturado_en)}`)));
+    return el("div.franja-estado.pendiente", icono("bolsa"), el("div", el("strong", `Apartado · ${dinero(ap.total)}`), el("span", `${prendas} · apartado ${hace(ap.creado_en)} · pendiente de facturar`)));
   };
 
   const pintar = () => {
-    const hoja = armarFactura({ tienda: estado.ajustes, apartado: ap, articulos: ap.articulos, urlFoto: (r) => datos.urlFoto(r), interna: true });
-    const anulado = ap.estado === "anulado";
-    // En el celular la factura va plegada (se abre con un toque); en la compu siempre a la vista
-    const factura = el("details.factura-plegable", { open: !matchMedia("(max-width: 960px)").matches },
-      el("summary", el("span", icono("imprimir", "chico"), ap.pagado ? "Ver el recibo" : "Ver la factura"), icono("atras", "chico flecha")),
-      el("div.contenedor-factura", hoja));
+    const pendiente = ap.estado === "pendiente";
     ctx.pintar(
       el("a.volver", { href: "#/apartados" }, icono("atras", "chico"), "Apartados"),
       el("div.cabeza",
@@ -222,104 +152,46 @@ async function vistaDetalle(_pagina, ctx, id) {
           el("div.renglon-sub", { style: "margin-top:6px" }, el("span.serie", ap.numero), sellosApartado(ap)))),
       franja(),
       el("div.dos-columnas",
-        factura,
+        el("section.panel",
+          el("div.panel-titulo", el("h2", "Prendas apartadas")),
+          el("div.lista", ap.articulos.map((a) => el("div.renglon",
+            marcaProducto(a),
+            el("div.renglon-cuerpo", el("div.renglon-titulo", a.nombre), el("div.renglon-sub", a.talla ? el("span.talla", a.talla) : null, a.color || "")),
+            el("div.renglon-fin", el("div.num", dinero(a.subtotal ?? a.cantidad * a.precio_unitario)), el("small", `${a.cantidad} × ${dinero(a.precio_unitario)}`))))),
+          el("div.recibo", { style: "margin-top:10px" },
+            el("div.linea", el("span.et", "Subtotal"), el("span.puntos"), el("span.val", dinero(ap.subtotal))),
+            Number(ap.envio) > 0 ? el("div.linea", el("span.et", "Envío"), el("span.puntos"), el("span.val", dinero(ap.envio))) : null,
+            el("div.linea.total", el("span.et", "Total"), el("span.puntos"), el("span.val", dinero(ap.total))))),
         el("aside.acciones-apartado",
-          anulado ? null : pasoPago(),
-          anulado ? null : pasoEntrega(),
-          anulado ? el("div.panel", el("p", `Anulado el ${fechaHora(ap.anulado_en)}.`), ap.motivo_anulacion ? el("p.suave", { style: "margin-top:6px" }, `Motivo: ${ap.motivo_anulacion}`) : null,
+          pendiente ? el("div.panel.panel-facturar",
+            el("div.panel-titulo", el("h2", "¿Ya pagó?")),
+            el("p.suave", { style: "margin-bottom:12px" }, "Pase el apartado a Facturación para emitir la factura de contado con estas prendas."),
+            el("a.btn.primario.ancho", { href: `#/facturacion/nueva?apartado=${ap.id}` }, icono("billete"), "Pasar a facturación")) : null,
+          ap.estado === "facturado" && ap.factura ? el("div.panel",
+            el("div.panel-titulo", el("h2", "Factura")),
+            el("a.btn.ancho", { href: `#/facturacion/${ap.factura.id}` }, icono("imprimir"), `Ver factura ${ap.factura.numero}`)) : null,
+          ap.estado === "anulado" ? el("div.panel", el("p", `Anulado el ${fechaHora(ap.anulado_en)}.`), ap.motivo_anulacion ? el("p.suave", { style: "margin-top:6px" }, `Motivo: ${ap.motivo_anulacion}`) : null,
             el("p.tenue", { style: "margin-top:6px;font-size:13px" }, "Las prendas volvieron al inventario.")) : null,
+          pendiente ? el("div.panel",
+            el("div.panel-titulo", el("h2", "Avisar al cliente")),
+            el("a.btn", { href: whatsapp(), target: "_blank", rel: "noopener" }, icono("chat"), ap.cliente_telefono ? `WhatsApp a ${telefonoBonito(ap.cliente_telefono)}` : "Enviar por WhatsApp"),
+            el("p.tenue", { style: "margin-top:8px;font-size:13px" }, "Le manda el detalle del pedido, el total y cómo pagar.")) : null,
           el("div.panel",
-            el("div.panel-titulo", el("h2", ap.pagado ? "Enviar el recibo" : "Enviar la factura")),
-            el("div.pila.chica",
-              el("a.btn.primario", { href: whatsapp(), target: "_blank", rel: "noopener" }, icono("chat"), ap.cliente_telefono ? `WhatsApp a ${telefonoBonito(ap.cliente_telefono)}` : "Enviar por WhatsApp"),
-              el("div.fila-botones.pareja",
-                el("button.btn", { type: "button", onclick: compartir }, icono("compartir"), "Compartir"),
-                el("button.btn", { type: "button", onclick: () => imprimirFactura(hoja, `Factura ${ap.numero} · ${ap.cliente_nombre}`) }, icono("imprimir"), "Guardar PDF")))),
-          el("div.panel",
-            el("div.panel-titulo", el("h2", "Cliente"), anulado ? null : el("button.btn.fantasma.chico", { type: "button", onclick: editarCliente }, icono("editar", "chico"), "Editar")),
+            el("div.panel-titulo", el("h2", "Cliente"), pendiente ? el("button.btn.fantasma.chico", { type: "button", onclick: editarCliente }, icono("editar", "chico"), "Editar") : null),
             el("div.recibo",
               ap.cliente_telefono ? el("div.renglon-sub", "Teléfono: ", el("b", telefonoBonito(ap.cliente_telefono))) : null,
               ap.cliente_direccion ? el("div.renglon-sub", "Entrega: ", ap.cliente_direccion) : null,
               ap.notas ? el("div.renglon-sub", { style: "margin-top:6px" }, "Notas: ", ap.notas) : null,
               !ap.cliente_telefono && !ap.cliente_direccion && !ap.notas ? el("p.tenue", "Sin más datos.") : null)),
-          ap.estado === "pendiente"
-            ? el("button.btn.peligro", { type: "button", onclick: anular }, icono("anular"), "Anular apartado")
-            : null)));
+          pendiente ? el("button.btn.peligro", { type: "button", onclick: anular }, icono("anular"), "Anular apartado") : null)));
   };
 
-  const pasoPago = () => el("div.estado-paso" + (ap.pagado ? ".hecho" : ""),
-    el("span.marca-paso", ap.pagado ? icono("check", "chico") : icono("billete", "chico")),
-    el("div.renglon-cuerpo",
-      el("strong", ap.pagado ? "Cancelado" : "Pendiente de pago"),
-      el("span", ap.pagado ? `${fecha(ap.pagado_en)}${ap.referencia_pago ? ` · ${ap.referencia_pago}` : ""}` : `Falta cobrar ${dinero(ap.total)}`)),
-    ap.pagado
-      ? el("button.btn.fantasma.chico", { type: "button", onclick: deshacerPago }, "Deshacer")
-      : el("button.btn.primario.chico", { type: "button", onclick: marcarPagado }, "Marcar pagado"));
-
-  const pasoEntrega = () => el("div.estado-paso" + (ap.estado === "entregado" ? ".hecho" : ""),
-    el("span.marca-paso", ap.estado === "entregado" ? icono("check", "chico") : icono("entrega", "chico")),
-    el("div.renglon-cuerpo",
-      el("strong", ap.estado === "entregado" ? "Entregado" : "Por entregar"),
-      el("span", ap.estado === "entregado" ? fecha(ap.entregado_en) : `${unidades(ap.articulos)} prendas apartadas ${hace(ap.creado_en)}`)),
-    ap.estado === "entregado"
-      ? el("button.btn.fantasma.chico", { type: "button", onclick: () => cambiarEntrega(false) }, "Deshacer")
-      : el("button.btn.chico", { type: "button", onclick: () => cambiarEntrega(true) }, "Marcar entregado"));
-
   const whatsapp = () => {
-    const texto = encodeURIComponent(textoWhatsApp({ tienda: estado.ajustes, apartado: ap, articulos: ap.articulos, enlace }));
+    const texto = encodeURIComponent(textoApartado({ tienda: estado.ajustes, apartado: ap, articulos: ap.articulos }));
     const tel = telefonoWa(ap.cliente_telefono);
     return tel ? `https://wa.me/${tel}?text=${texto}` : `https://wa.me/?text=${texto}`;
   };
 
-  const actualizar = (nuevo) => {
-    ap = nuevo;
-    pintar();
-  };
-
-  async function marcarPagado() {
-    const ref = el("input", { placeholder: "Ej.: SINPE 4471 o número de depósito" });
-    const boton = el("button.btn.primario", { type: "button" }, icono("check"), "Marcar como pagado");
-    const { cerrar } = abrirHoja({
-      titulo: `Pago de ${ap.numero}`,
-      clase: "chica",
-      cuerpo: el("div.pila.media",
-        el("div.recibo", el("div.linea.total", el("span.et", "Total"), el("span.puntos"), el("span.val", dinero(ap.total)))),
-        el("label.campo", el("span", "Comprobante ", el("em", "(opcional)")), ref)),
-      pie: [el("button.btn.fantasma", { type: "button", onclick: () => cerrar() }, "Volver"), boton],
-    });
-    boton.addEventListener("click", async () => {
-      try {
-        await trabajando(boton, () => datos.marcarPago(ap.id, true, ref.value));
-        cerrar();
-        actualizar(await datos.apartado(ap.id));
-        avisar(`${ap.numero} marcado como pagado`);
-      } catch (e) {
-        avisar(mensajeError(e), "error");
-      }
-    });
-    ref.focus();
-  }
-  async function deshacerPago() {
-    if (!(await confirmar("¿Quitar el pago?", { detalle: "El apartado vuelve a quedar pendiente de pago.", si: "Quitar pago" }))) return;
-    try {
-      await datos.marcarPago(ap.id, false);
-      actualizar(await datos.apartado(ap.id));
-    } catch (e) {
-      avisar(mensajeError(e), "error");
-    }
-  }
-  async function cambiarEntrega(entregado) {
-    if (entregado && !ap.pagado && !(await confirmar("Todavía no está pagado", { detalle: "¿Lo marca como entregado de todas formas? Seguirá apareciendo en «Por cobrar».", si: "Sí, entregado" }))) return;
-    if (!entregado && !(await confirmar("¿Deshacer la entrega?", { detalle: "Vuelve a la lista de apartados por entregar.", si: "Deshacer" }))) return;
-    try {
-      await datos.marcarEntrega(ap.id, entregado);
-      actualizar(await datos.apartado(ap.id));
-      avisar(entregado ? "Marcado como entregado" : "Vuelve a estar por entregar");
-      contarPendientes();
-    } catch (e) {
-      avisar(mensajeError(e), "error");
-    }
-  }
   async function anular() {
     const motivo = el("input", { placeholder: "Ej.: no respondió, cambió de idea" });
     const boton = el("button.btn.peligro", { type: "button" }, "Anular y devolver al inventario");
@@ -327,8 +199,7 @@ async function vistaDetalle(_pagina, ctx, id) {
       titulo: `Anular ${ap.numero}`,
       clase: "chica",
       cuerpo: el("div.pila.media",
-        el("p.suave", `Las ${unidades(ap.articulos)} prendas vuelven a estar disponibles. La factura queda marcada como anulada.`),
-        ap.pagado ? el("div.error-form", "Este apartado está pagado: recuerde devolverle el dinero al cliente.") : null,
+        el("p.suave", `Las ${unidades(ap.articulos)} prendas vuelven a estar disponibles.`),
         el("label.campo", el("span", "Motivo ", el("em", "(opcional)")), motivo)),
       pie: [el("button.btn.fantasma", { type: "button", onclick: () => cerrar() }, "Volver"), boton],
     });
@@ -337,7 +208,8 @@ async function vistaDetalle(_pagina, ctx, id) {
         await trabajando(boton, () => datos.anularApartado(ap.id, motivo.value), "Anulando…");
         cerrar();
         await cargarProductos();
-        actualizar(await datos.apartado(ap.id));
+        ap = await datos.apartado(ap.id);
+        pintar();
         avisar(`${ap.numero} anulado; las prendas volvieron al inventario`);
         contarPendientes();
       } catch (e) {
@@ -360,7 +232,6 @@ async function vistaDetalle(_pagina, ctx, id) {
         el("div.rejilla.dos", el("label.campo", el("span", "Teléfono"), telefono), el("label.campo", el("span", "Envío"), envio)),
         el("label.campo", el("span", "Dirección o forma de entrega"), direccion),
         el("label.campo", el("span", "Notas internas"), notas),
-        ap.pagado ? el("p.tenue", { style: "font-size:13px" }, "Ya está pagado: si cambia el envío, cambia el total pagado.") : null,
         error),
       pie: [el("button.btn.fantasma", { type: "button", onclick: () => cerrar() }, "Volver"), boton],
     });
@@ -373,12 +244,12 @@ async function vistaDetalle(_pagina, ctx, id) {
         return;
       }
       try {
-        const nuevo = await trabajando(boton, () => datos.editarApartado(ap.id, {
+        ap = await trabajando(boton, () => datos.editarApartado(ap.id, {
           cliente_nombre: nombre.value.trim(), cliente_telefono: telefono.value.trim() || null,
           cliente_direccion: direccion.value.trim() || null, notas: notas.value.trim() || null, envio: env,
         }));
         cerrar();
-        actualizar(nuevo);
+        pintar();
         avisar("Datos del cliente guardados");
       } catch (e) {
         error.textContent = mensajeError(e);
@@ -386,12 +257,6 @@ async function vistaDetalle(_pagina, ctx, id) {
       }
     });
   }
-  async function compartir() {
-    const texto = textoWhatsApp({ tienda: estado.ajustes, apartado: ap, articulos: ap.articulos });
-    const r = await compartirFactura({ titulo: `${ap.pagado ? "Recibo" : "Factura"} ${ap.numero} · ${estado.ajustes?.nombre_tienda || "Myle Store"}`, texto, enlace });
-    if (r === "copiado") avisar("Enlace copiado; péguelo donde quiera enviarlo");
-  }
-
   pintar();
 }
 

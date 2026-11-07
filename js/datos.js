@@ -40,7 +40,8 @@ const almacenSesion = {
   removeItem(k) { try { sessionStorage.removeItem(k); localStorage.removeItem(k); } catch { /* nada que quitar */ } },
 };
 
-const LISTA_APARTADOS = "*, articulos:apartado_articulos(*)";
+const LISTA_APARTADOS = "*, articulos:apartado_articulos(*), factura:facturas!apartados_factura_id_fkey(id, numero, estado)";
+const LISTA_FACTURAS = "*, articulos:factura_articulos(*), apartado:apartados!facturas_apartado_id_fkey(id, numero)";
 const LISTA_MOVIMIENTOS = "*, producto:productos(id, nombre, talla, color, foto_path), apartado:apartados(id, numero, estado, cliente_nombre)";
 
 async function crearReal() {
@@ -170,12 +171,41 @@ async function crearReal() {
         p_cliente_direccion: d.clienteDireccion || null, p_notas: d.notas || null, p_envio: d.envio || 0,
       });
     },
-    marcarPago: (id, pagado, referencia) => rpc("marcar_pago", { p_apartado_id: id, p_pagado: pagado, p_referencia: referencia || null }),
-    marcarEntrega: (id, entregado) => rpc("marcar_entrega", { p_apartado_id: id, p_entregado: entregado }),
     anularApartado: (id, motivo) => rpc("anular_apartado", { p_apartado_id: id, p_motivo: motivo || null }),
     async editarApartado(id, cambios) {
       return respuesta(await sb.from("apartados").update(cambios).eq("id", id).select(LISTA_APARTADOS).single());
     },
-    facturaPublica: (token) => rpc("factura_publica", { p_token: token }),
+
+    // ---------- Facturas de contado ----------
+    async facturas() {
+      return respuesta(await sb.from("facturas").select(LISTA_FACTURAS).order("creado_en", { ascending: false }).limit(500));
+    },
+    async factura(id) {
+      return respuesta(await sb.from("facturas").select(LISTA_FACTURAS).eq("id", id).maybeSingle());
+    },
+    crearFactura(d) {
+      return rpc("crear_factura", {
+        p_cliente_nombre: d.clienteNombre, p_articulos: d.articulos || null, p_apartado_id: d.apartadoId || null,
+        p_cliente_telefono: d.clienteTelefono || null, p_cliente_direccion: d.clienteDireccion || null, p_notas: d.notas || null,
+        p_envio: d.envio || 0, p_descuento: d.descuento || 0, p_forma_pago: d.formaPago || null, p_referencia_pago: d.referenciaPago || null,
+      });
+    },
+    anularFactura: (id, motivo) => rpc("anular_factura", { p_factura_id: id, p_motivo: motivo || null }),
+    async editarFactura(id, cambios) {
+      return respuesta(await sb.from("facturas").update(cambios).eq("id", id).select(LISTA_FACTURAS).single());
+    },
+    facturaPublica: (token) => rpc("factura_contado_publica", { p_token: token }),
+
+    // ---------- Gastos ----------
+    async gastos({ limite = 500 } = {}) {
+      return respuesta(await sb.from("gastos").select("*").order("fecha", { ascending: false }).order("creado_en", { ascending: false }).limit(limite));
+    },
+    crearGasto: (d) => rpc("crear_gasto", { p_descripcion: d.descripcion, p_monto: d.monto, p_categoria: d.categoria || "otro", p_fecha: d.fecha || null, p_pagado_con: d.pagadoCon || null, p_nota: d.nota || null }),
+    async editarGasto(id, cambios) {
+      return respuesta(await sb.from("gastos").update(cambios).eq("id", id).select().single());
+    },
+    async borrarGasto(id) {
+      respuesta(await sb.from("gastos").delete().eq("id", id));
+    },
   };
 }

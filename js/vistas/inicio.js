@@ -1,8 +1,8 @@
-// Inicio: cómo está el inventario, qué falta por entregar o cobrar y lo último que se movió
+// Inicio: cómo va la tienda, el recorrido, qué falta por facturar y lo último que se movió
 import { datos } from "../datos.js";
 import { estado, cargarProductos, ponerPendientes } from "../estado.js";
 import { el, icono, dinero, mismoMes, esHoy, nombreMes, talla } from "../util.js";
-import { fotoProducto, sellosApartado, cajaDias, renglonMovimiento, unidades, vacio } from "../componentes.js";
+import { marcaProducto, sellosApartado, cajaDias, renglonMovimiento, unidades, vacio } from "../componentes.js";
 import { abrirFicha } from "./inventario.js";
 
 const suma = (lista, fn) => lista.reduce((s, x) => s + fn(x), 0);
@@ -10,13 +10,14 @@ const linea = (et, val, clase = "", detalle) =>
   el("div.linea", el("span.et", et), el("span.puntos"), el("span.val" + clase, val, detalle ? el("small", detalle) : null));
 
 export async function vistaInicio(_pagina, ctx) {
-  const [apartados, salidas, ultimos, compras, proveedores, ingresosMes] = await Promise.all([
+  const [apartados, ultimos, compras, proveedores, ingresosMes, facturas, gastos] = await Promise.all([
     datos.apartados(),
-    datos.movimientos({ tipo: "salida", limite: 500 }),
     datos.movimientos({ limite: 8 }),
     datos.compras({ limite: 100 }).catch(() => []),
     datos.proveedores().catch(() => []),
     datos.ingresos({ limite: 500 }),
+    datos.facturas().catch(() => []),
+    datos.gastos().catch(() => []),
     cargarProductos(),
   ]);
   const productos = estado.productos;
@@ -25,22 +26,26 @@ export async function vistaInicio(_pagina, ctx) {
   const valorCosto = suma(productos, (p) => p.existencias * Number(p.costo));
   const valorVenta = suma(productos, (p) => p.existencias * Number(p.precio_venta));
 
-  const vivos = apartados.filter((a) => a.estado !== "anulado");
-  const porEntregar = apartados.filter((a) => a.estado === "pendiente").sort((a, b) => a.creado_en.localeCompare(b.creado_en));
-  const porCobrar = vivos.filter((a) => !a.pagado);
-  const cobradoMes = suma(vivos.filter((a) => a.pagado && mismoMes(a.pagado_en)), (a) => Number(a.total));
-  const ventasMes = suma(salidas.filter((m) => m.motivo === "venta" && mismoMes(m.creado_en)), (m) => m.cantidad * Number(m.precio_unitario || 0));
+  const pendientes = apartados.filter((a) => a.estado === "pendiente").sort((a, b) => a.creado_en.localeCompare(b.creado_en));
+  const porFacturar = suma(pendientes, (a) => Number(a.total));
+  const emitidas = facturas.filter((f) => f.estado === "emitida");
+  const facturadoMes = suma(emitidas.filter((f) => mismoMes(f.creado_en)), (f) => Number(f.total));
 
-  // Cómo vamos: lo vendido hoy y en el mes (apartados cobrados + ventas directas) y la ganancia de lo ingresado
-  const cobradoHoy = suma(vivos.filter((a) => a.pagado && esHoy(a.pagado_en)), (a) => Number(a.total));
-  const ventasHoy = suma(salidas.filter((m) => m.motivo === "venta" && esHoy(m.creado_en)), (m) => m.cantidad * Number(m.precio_unitario || 0));
-  const apartadosHoy = vivos.filter((a) => a.pagado && esHoy(a.pagado_en)).length + salidas.filter((m) => m.motivo === "venta" && esHoy(m.creado_en)).length;
-  const apartadosMes = vivos.filter((a) => a.pagado && mismoMes(a.pagado_en)).length + salidas.filter((m) => m.motivo === "venta" && mismoMes(m.creado_en)).length;
+  // Cómo vamos: lo facturado hoy y en el mes, los gastos y la ganancia de lo ingresado
+  const facturadoHoy = suma(emitidas.filter((f) => esHoy(f.creado_en)), (f) => Number(f.total));
+  const ventasNumHoy = emitidas.filter((f) => esHoy(f.creado_en)).length;
+  const ventasNumMes = emitidas.filter((f) => mismoMes(f.creado_en)).length;
+  const enDia = (g) => g.fecha + "T12:00:00-06:00";
+  const gastosMes = suma(gastos.filter((g) => mismoMes(enDia(g))), (g) => Number(g.monto));
+  const gastosHoy = suma(gastos.filter((g) => esHoy(enDia(g))), (g) => Number(g.monto));
+  // Ganancia real del mes: lo vendido menos lo que costaron esas prendas, menos los gastos
+  const costoVendidoMes = suma(emitidas.filter((f) => mismoMes(f.creado_en)).flatMap((f) => f.articulos), (a) => a.cantidad * Number(a.costo_unitario || 0));
+  const gananciaMes = facturadoMes - costoVendidoMes - gastosMes;
   const delMes = ingresosMes.filter((i) => mismoMes(i.creado_en));
   const invertidoMes = suma(delMes, (i) => i.cantidad * Number(i.costo_unitario));
   const esperadoMes = suma(delMes, (i) => i.cantidad * Number(i.precio_venta));
   const prendasMes = suma(delMes, (i) => i.cantidad);
-  ponerPendientes(porEntregar.length);
+  ponerPendientes(pendientes.length);
 
   const agotandose = productos.filter((p) => p.activo && p.existencias <= 2).sort((a, b) => a.existencias - b.existencias).slice(0, 8);
   const mes = nombreMes();
@@ -63,18 +68,18 @@ export async function vistaInicio(_pagina, ctx) {
     {
       icono: "percha", titulo: "Inventario", href: "#/inventario",
       hecho: unidadesDisponibles > 0,
-      detalle: unidadesDisponibles ? `${unidadesDisponibles} prendas disponibles` : "Registre las prendas con su foto",
+      detalle: unidadesDisponibles ? `${unidadesDisponibles} prendas disponibles` : "Registre las prendas con su talla y precio",
     },
     {
-      icono: "bolsa", titulo: "Apartados", href: porEntregar.length ? "#/apartados" : "#/apartados/nuevo",
-      hecho: porEntregar.length === 0 && apartados.length > 0,
-      aviso: porEntregar.length > 0,
-      detalle: porEntregar.length ? `${porEntregar.length} por entregar` : "Arme el pedido y envíe la factura",
+      icono: "bolsa", titulo: "Apartados", href: pendientes.length ? "#/apartados" : "#/apartados/nuevo",
+      hecho: pendientes.length === 0 && apartados.length > 0,
+      aviso: pendientes.length > 0,
+      detalle: pendientes.length ? `${pendientes.length} por facturar · ${dinero(porFacturar)}` : "Aparte las prendas de un pedido",
     },
     {
-      icono: "entrega", titulo: "Entregas y salidas", href: porEntregar.length ? `#/apartados/${porEntregar[0].id}` : "#/salidas",
-      hecho: apartados.some((a) => a.estado === "entregado"),
-      detalle: porCobrar.length ? `${porCobrar.length} por cobrar` : "Marque pagado y entregado",
+      icono: "billete", titulo: "Facturación", href: pendientes.length ? `#/facturacion/nueva?apartado=${pendientes[0].id}` : "#/facturacion/nueva",
+      hecho: emitidas.length > 0,
+      detalle: emitidas.length ? `${emitidas.length} factura${emitidas.length === 1 ? "" : "s"} emitida${emitidas.length === 1 ? "" : "s"}` : "Facture cuando el cliente pague",
     },
   ];
   const recorrido = el("div.recorrido", pasos.map((p, i) => el("a.paso" + (p.hecho ? ".hecho" : "") + (p.aviso ? ".aviso" : ""), { href: p.href },
@@ -84,12 +89,14 @@ export async function vistaInicio(_pagina, ctx) {
 
   const cifra = (rotulo, valor, detalle, clase = "") => el("div.cifra" + clase, el("span.cifra-rotulo", rotulo), el("span.cifra-valor", valor), detalle ? el("span.cifra-detalle", detalle) : null);
   const comoVamos = el("section.panel.como-vamos",
-    el("div.panel-titulo", el("h2", "Cómo vamos"), el("a", { href: "#/movimientos/salidas" }, "Ver ventas →")),
+    el("div.panel-titulo", el("h2", "Cómo vamos"), el("a", { href: "#/facturacion" }, "Ver ventas →")),
     el("div.cifras",
-      cifra("Vendido hoy", dinero(cobradoHoy + ventasHoy), apartadosHoy ? `${apartadosHoy} venta${apartadosHoy === 1 ? "" : "s"}` : "Todavía nada hoy", cobradoHoy + ventasHoy > 0 ? ".listo" : ""),
-      cifra(`Vendido en ${mes}`, dinero(cobradoMes + ventasMes), `${apartadosMes} venta${apartadosMes === 1 ? "" : "s"} · ${dinero(cobradoMes)} apartados + ${dinero(ventasMes)} directas`),
-      cifra("Ganancia del inventario", dinero(valorVenta - valorCosto), `Si se vende todo lo que hay: ${dinero(valorVenta)} a la venta, costó ${dinero(valorCosto)}`, ".acento"),
-      cifra(`Ingresado en ${mes}`, dinero(esperadoMes - invertidoMes), prendasMes ? `Ganancia esperada de ${prendasMes} prendas: invertido ${dinero(invertidoMes)}, a la venta ${dinero(esperadoMes)}` : "Sin ingresos este mes")));
+      cifra("Vendido hoy", dinero(facturadoHoy), ventasNumHoy ? `${ventasNumHoy} venta${ventasNumHoy === 1 ? "" : "s"}${gastosHoy ? ` · gastos ${dinero(gastosHoy)}` : ""}` : "Todavía nada hoy", facturadoHoy > 0 ? ".listo" : ""),
+      cifra(`Vendido en ${mes}`, dinero(facturadoMes), `${ventasNumMes} factura${ventasNumMes === 1 ? "" : "s"} de contado`),
+      cifra(`Ganancia de ${mes}`, dinero(gananciaMes), `Vendido menos costo de las prendas (${dinero(costoVendidoMes)}) y gastos (${dinero(gastosMes)})`, gananciaMes >= 0 ? ".acento" : ".urgente"),
+      cifra("Ganancia del inventario", dinero(valorVenta - valorCosto), `Si se vende todo lo que hay: ${dinero(valorVenta)} a la venta, costó ${dinero(valorCosto)}`),
+      cifra(`Ingresado en ${mes}`, dinero(esperadoMes - invertidoMes), prendasMes ? `Ganancia esperada de ${prendasMes} prendas: invertido ${dinero(invertidoMes)}, a la venta ${dinero(esperadoMes)}` : "Sin ingresos este mes"),
+      cifra(`Gastos de ${mes}`, dinero(gastosMes), gastos.length ? `${gastos.filter((g) => mismoMes(enDia(g))).length} gasto${gastos.filter((g) => mismoMes(enDia(g))).length === 1 ? "" : "s"} · cinta, gasolina, envíos…` : "Sin gastos registrados", gastosMes > 0 ? ".urgente" : "")));
 
   ctx.pintar(
     el("div.cabeza",
@@ -99,8 +106,9 @@ export async function vistaInicio(_pagina, ctx) {
     el("div.atajos",
       el("a.btn.primario", { href: "#/movimientos/compras/nueva" }, icono("caja"), "Nueva compra"),
       el("a.btn", { href: "#/ingresos" }, icono("ingreso"), "Registrar prenda"),
-      el("a.btn", { href: "#/apartados/nuevo" }, icono("bolsa"), "Nuevo apartado"),
-      el("a.btn", { href: "#/salidas" }, icono("salida"), "Salida")),
+      el("a.btn", { href: "#/facturacion/nueva" }, icono("billete"), "Factura"),
+      el("a.btn", { href: "#/apartados/nuevo" }, icono("bolsa"), "Apartado"),
+      el("a.btn", { href: "#/gastos" }, icono("gasto"), "Gasto")),
     el("div.resumen-cifras",
       el("section.panel",
         el("div.panel-titulo", el("h2", "Inventario"), el("a", { href: "#/inventario" }, "Ver todo →")),
@@ -111,29 +119,28 @@ export async function vistaInicio(_pagina, ctx) {
           linea("Valor a precio de venta", dinero(valorVenta)),
           linea("Ganancia esperada", dinero(valorVenta - valorCosto), ".acento"))),
       el("section.panel",
-        el("div.panel-titulo", el("h2", "Apartados"), el("a", { href: "#/apartados" }, "Ver todos →")),
+        el("div.panel-titulo", el("h2", "Ventas y apartados"), el("a", { href: "#/facturacion" }, "Ver facturas →")),
         el("div.recibo",
-          linea("Por entregar", porEntregar.length, "", `${unidades(porEntregar.flatMap((a) => a.articulos))} prendas`),
-          linea("Por cobrar", dinero(suma(porCobrar, (a) => Number(a.total))), porCobrar.length ? ".aviso" : "", `${porCobrar.length} apartado${porCobrar.length === 1 ? "" : "s"}`),
-          linea(`Cobrado en ${mes}`, dinero(cobradoMes), cobradoMes ? ".listo" : ""),
-          linea(`Ventas directas en ${mes}`, dinero(ventasMes)),
-          linea(`Total vendido en ${mes}`, dinero(cobradoMes + ventasMes), "", null)))),
+          linea("Apartados por facturar", pendientes.length, pendientes.length ? ".aviso" : "", `${dinero(porFacturar)} · ${unidades(pendientes.flatMap((a) => a.articulos))} prendas`),
+          linea(`Facturado en ${mes}`, dinero(facturadoMes), facturadoMes ? ".listo" : "", `${emitidas.filter((f) => mismoMes(f.creado_en)).length} facturas`),
+          linea(`Gastos en ${mes}`, dinero(gastosMes), gastosMes ? ".urgente" : ""),
+          linea(`Ganancia de ${mes}`, dinero(gananciaMes), gananciaMes >= 0 ? ".acento" : ".urgente", null)))),
     el("div.dos-columnas.iguales",
       el("section.panel",
-        el("div.panel-titulo", el("h2", "Por entregar"), el("a", { href: "#/apartados/nuevo" }, "+ Nuevo apartado")),
-        porEntregar.length
-          ? el("div.lista", porEntregar.slice(0, 6).map((ap) => el("a.renglon", { href: `#/apartados/${ap.id}` },
+        el("div.panel-titulo", el("h2", "Apartados por facturar"), el("a", { href: "#/apartados/nuevo" }, "+ Nuevo apartado")),
+        pendientes.length
+          ? el("div.lista", pendientes.slice(0, 6).map((ap) => el("a.renglon", { href: `#/apartados/${ap.id}` },
             cajaDias(ap),
             el("div.renglon-cuerpo",
               el("div.renglon-titulo", ap.cliente_nombre),
               el("div.renglon-sub", el("span.mono.tenue", ap.numero), sellosApartado(ap)[0])),
             el("div.renglon-fin", el("div.num", dinero(ap.total)), el("small", `${unidades(ap.articulos)} prendas`)))))
-          : vacio("bolsa", "No hay apartados por entregar.")),
+          : vacio("bolsa", "No hay apartados pendientes.")),
       el("section.panel",
         el("div.panel-titulo", el("h2", "Se están agotando"), el("a", { href: "#/ingresos" }, "+ Ingreso")),
         agotandose.length
           ? el("div.lista", agotandose.map((p) => el("button.renglon", { type: "button", onclick: () => abrirFicha(p.id) },
-            fotoProducto(p),
+            marcaProducto(p),
             el("div.renglon-cuerpo", el("div.renglon-titulo", p.nombre), el("div.renglon-sub", talla(p.talla), p.color || "")),
             el("div.renglon-fin",
               p.existencias === 0 ? el("span.sello.agotado", "Agotado") : el("div.num", { style: "color:var(--aviso)" }, `Quedan ${p.existencias}`)))))

@@ -3,12 +3,12 @@
 import { datos } from "../datos.js";
 import { estado, cargarProductos } from "../estado.js";
 import { el, icono, dinero, fecha, talla, tela, numero, abrirHoja, campoDinero, contador, trabajando, avisar, mensajeError } from "../util.js";
-import { fotoProducto, renglonMovimiento, selectorProducto, productoElegido, vacio, MOTIVOS } from "../componentes.js";
+import { marcaProducto, renglonMovimiento, selectorProducto, productoElegido, vacio, MOTIVOS } from "../componentes.js";
 import { abrirFicha } from "./inventario.js";
 import { selectorProveedor } from "./proveedores.js";
 
 const PESTANAS = [["compras", "Compras"], ["salidas", "Salidas"], ["todo", "Todo"]];
-const MOTIVOS_SALIDA = ["apartado", "venta", "danado", "devolucion", "regalo", "ajuste"];
+const MOTIVOS_SALIDA = ["factura", "apartado", "danado", "devolucion", "regalo", "ajuste"];
 const ZONA = "America/Costa_Rica";
 const fMes = new Intl.DateTimeFormat("es-CR", { month: "long", year: "numeric", timeZone: ZONA });
 const claveMes = (d) => { const p = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", timeZone: ZONA }).formatToParts(new Date(d)); return `${p.find((x) => x.type === "year").value}-${p.find((x) => x.type === "month").value}`; };
@@ -91,7 +91,7 @@ export async function vistaMovimientos(pagina, ctx) {
   };
 
   const filaIngreso = (i) => el("button.renglon", { type: "button", onclick: () => abrirFicha(i.producto_id) },
-    fotoProducto(i.producto),
+    marcaProducto(i.producto),
     el("div.renglon-cuerpo",
       el("div.renglon-titulo", i.producto?.nombre || "Producto"),
       el("div.renglon-sub", el("span.serie", i.serie), talla(i.producto?.talla), tela(i.producto?.color), el("span.tenue", fecha(i.creado_en)))),
@@ -108,7 +108,7 @@ export async function vistaMovimientos(pagina, ctx) {
     }, m ? MOTIVOS[m] : "Todos los motivos")));
     filtros.append(chipsMotivo);
     const lista = movimientos.filter((m) => m.tipo === "salida" && enMes(m.creado_en) && (!filtro.motivo || m.motivo === filtro.motivo));
-    const vendido = suma(lista.filter((m) => m.motivo === "venta" || m.motivo === "apartado"), (m) => m.cantidad * Number(m.precio_unitario || 0));
+    const vendido = suma(lista.filter((m) => m.motivo === "factura" || (m.motivo === "apartado" && m.factura_id)), (m) => m.cantidad * Number(m.precio_unitario || 0));
     const perdidas = lista.filter((m) => ["danado", "regalo", "ajuste"].includes(m.motivo));
     resumen.replaceChildren(
       el("span", el("b", lista.length), ` salida${lista.length === 1 ? "" : "s"}`),
@@ -134,7 +134,7 @@ export async function vistaMovimientos(pagina, ctx) {
       el("span", "entraron ", el("b", suma(entradas, (m) => m.cantidad))),
       el("span", "salieron ", el("b", suma(salidas, (m) => m.cantidad))),
       el("span", "invertido ", el("b", dinero(suma(entradas.filter((m) => m.motivo === "ingreso"), (m) => m.cantidad * Number(m.precio_unitario || 0))))),
-      el("span", "vendido ", el("b", dinero(suma(salidas.filter((m) => ["venta", "apartado"].includes(m.motivo)), (m) => m.cantidad * Number(m.precio_unitario || 0))))));
+      el("span", "vendido ", el("b", dinero(suma(salidas.filter((m) => m.motivo === "factura" || (m.motivo === "apartado" && m.factura_id)), (m) => m.cantidad * Number(m.precio_unitario || 0))))));
     cuerpo.replaceChildren(
       el("div.panel-titulo", el("h2", "Todos los movimientos")),
       lista.length ? listaPorDia(lista) : vacio("caja", "No hay movimientos con ese filtro."));
@@ -150,7 +150,7 @@ export async function vistaMovimientos(pagina, ctx) {
     }
     return el("div.lista", grupos.map((g) => [
       el("div.separador-dia", g.dia),
-      g.items.map((m) => renglonMovimiento(m, { alAbrir: (x) => (x.apartado_id ? (location.hash = `#/apartados/${x.apartado_id}`) : abrirFicha(x.producto_id)) })),
+      g.items.map((m) => renglonMovimiento(m, { alAbrir: (x) => (x.factura_id && x.motivo !== "apartado" ? (location.hash = `#/facturacion/${x.factura_id}`) : x.apartado_id ? (location.hash = `#/apartados/${x.apartado_id}`) : abrirFicha(x.producto_id)) })),
     ]));
   }
 
@@ -254,7 +254,7 @@ async function vistaCompra(_pagina, ctx, id) {
         el("section.panel",
           el("div.panel-titulo", el("h2", "Prendas registradas"), el("a.btn.primario.chico", { href: `#/ingresos?compra=${c.id}` }, icono("mas", "chico"), "Registrar prenda")),
           c.ingresos.length ? el("div.lista", c.ingresos.map((i) => el("button.renglon", { type: "button", onclick: () => abrirFicha(i.producto_id) },
-            fotoProducto(i.producto),
+            marcaProducto(i.producto),
             el("div.renglon-cuerpo",
               el("div.renglon-titulo", i.producto?.nombre || "Producto"),
               el("div.renglon-sub", el("span.serie", i.serie), talla(i.producto?.talla), tela(i.producto?.color))),
