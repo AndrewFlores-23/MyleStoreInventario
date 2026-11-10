@@ -6,6 +6,7 @@ export const MOTIVOS = {
   ingreso: "Ingreso",
   anulacion: "Apartado anulado",
   apartado: "Apartado",
+  quitado: "Quitado del apartado",
   factura: "Factura de contado",
   venta: "Venta directa",
   danado: "Dañado o defectuoso",
@@ -108,6 +109,7 @@ export function renglonMovimiento(m, { alAbrir, mostrarProducto = true } = {}) {
   const signo = m.tipo === "entrada" ? "+" : "−";
   let detalle = MOTIVOS[m.motivo] || m.motivo;
   if (m.motivo === "apartado" && m.apartado) detalle = `Apartado · ${m.apartado.cliente_nombre}`;
+  if (m.motivo === "quitado" && m.apartado) detalle = `Quitado del apartado · ${m.apartado.cliente_nombre}`;
   const ref = m.referencia ? el("span.serie", m.referencia) : null;
   const cuerpo = [
     el("div.renglon-titulo", mostrarProducto ? p.nombre || "Producto" : detalle),

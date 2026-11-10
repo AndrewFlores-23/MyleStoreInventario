@@ -2,11 +2,13 @@
 import { el, icono, dinero, numero, talla, tela, campoDinero, contador, avisar } from "../util.js";
 import { marcaProducto, selectorProducto, vacio } from "../componentes.js";
 
-export function armarPedido({ conDescuento = false, alCambiar } = {}) {
-  const carrito = []; // { producto, cantidad, precio }
+// inicial: prendas que ya estaban en el pedido (al modificar un apartado); lo ya apartado de cada una cuenta como disponible
+export function armarPedido({ conDescuento = false, alCambiar, inicial = [], envio: envioInicial = 0 } = {}) {
+  const carrito = inicial.map((l) => ({ producto: l.producto, cantidad: l.cantidad, precio: Number(l.precio), apartado: l.cantidad })); // { producto, cantidad, precio, apartado }
+  const tope = (l) => l.producto.existencias + (l.apartado || 0);
   const lineas = el("div.carrito");
   const totales = el("div.recibo");
-  const envio = campoDinero({ placeholder: "0", oninput: () => pintarTotales() });
+  const envio = campoDinero({ placeholder: "0", value: envioInicial || "", oninput: () => pintarTotales() });
   const descuento = campoDinero({ placeholder: "0", oninput: () => pintarTotales() });
   const envioIn = envio.querySelector("input");
   const descuentoIn = descuento.querySelector("input");
@@ -17,8 +19,8 @@ export function armarPedido({ conDescuento = false, alCambiar } = {}) {
     alElegir: (p) => {
       const ya = carrito.find((l) => l.producto.id === p.id);
       if (ya) {
-        if (ya.cantidad < p.existencias) ya.cantidad += 1;
-        else avisar(`Solo hay ${p.existencias} de esta prenda`, "error");
+        if (ya.cantidad < tope(ya)) ya.cantidad += 1;
+        else avisar(`Solo hay ${tope(ya)} de esta prenda`, "error");
       } else {
         carrito.push({ producto: p, cantidad: 1, precio: Number(p.precio_venta) });
       }
@@ -29,13 +31,13 @@ export function armarPedido({ conDescuento = false, alCambiar } = {}) {
   const pintarLineas = () => {
     lineas.replaceChildren(...(carrito.length ? carrito.map((l, i) => {
       const sub = el("div.subtotal", dinero(l.cantidad * l.precio));
-      const cuenta = contador({ valor: l.cantidad, min: 1, max: l.producto.existencias, chico: true, alCambiar: (n) => { l.cantidad = n; sub.textContent = dinero(l.cantidad * l.precio); pintarTotales(); } });
+      const cuenta = contador({ valor: l.cantidad, min: 1, max: tope(l), chico: true, alCambiar: (n) => { l.cantidad = n; sub.textContent = dinero(l.cantidad * l.precio); pintarTotales(); } });
       const precio = campoDinero({ value: l.precio, "aria-label": "Precio por unidad", oninput: (e) => { const v = numero(e.target.value); l.precio = v >= 0 ? v : 0; sub.textContent = dinero(l.cantidad * l.precio); pintarTotales(); } });
       return el("div.linea-carrito",
         marcaProducto(l.producto),
         el("div.info",
           el("div.renglon-titulo", l.producto.nombre),
-          el("div.renglon-sub", talla(l.producto.talla), tela(l.producto.color), el("span.tenue", `de ${l.producto.existencias} disponibles`))),
+          el("div.renglon-sub", talla(l.producto.talla), tela(l.producto.color), el("span.tenue", `de ${tope(l)} disponibles`))),
         sub,
         el("div.controles", cuenta, precio,
           el("button.btn.fantasma.btn-icono.quitar", { type: "button", "aria-label": "Quitar", title: "Quitar", onclick: () => { carrito.splice(i, 1); pintarLineas(); } }, icono("x"))));
@@ -49,11 +51,12 @@ export function armarPedido({ conDescuento = false, alCambiar } = {}) {
   const pintarTotales = () => {
     const sub = carrito.reduce((s, l) => s + l.cantidad * l.precio, 0);
     const n = carrito.reduce((s, l) => s + l.cantidad, 0);
+    // replaceChildren convierte un null en el texto «null»: la línea de descuento solo va cuando hay descuento
     totales.replaceChildren(
       linea("Artículos", el("span", n, el("small", n === 1 ? "unidad" : "unidades"))),
       linea("Subtotal", dinero(sub)),
       linea("Envío", dinero(leerEnvio())),
-      conDescuento && leerDescuento() > 0 ? linea("Descuento", `−${dinero(leerDescuento())}`) : null,
+      ...(conDescuento && leerDescuento() > 0 ? [linea("Descuento", `−${dinero(leerDescuento())}`)] : []),
       linea("Total", dinero(sub + leerEnvio() - leerDescuento()), ".total"));
     alCambiar?.();
   };
@@ -61,6 +64,8 @@ export function armarPedido({ conDescuento = false, alCambiar } = {}) {
   pintarLineas();
   return {
     panelPrendas: (titulo = "Prendas del pedido") => el("section.panel", el("div.panel-titulo", el("h2", titulo)), selector, lineas),
+    selector,
+    lineas,
     campoEnvio: el("label.campo", el("span", "Envío ", el("em", "(opcional)")), envio),
     campoDescuento: conDescuento ? el("label.campo", el("span", "Descuento ", el("em", "(opcional)")), descuento) : null,
     totales,

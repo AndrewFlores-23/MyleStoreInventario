@@ -197,6 +197,42 @@ function apartar(db, d, cuando = ahora()) {
   return apartadoCon(db, ap);
 }
 
+// Modificar las prendas de un apartado pendiente: por producto, lo que sobra vuelve («quitado») y lo que falta se aparta
+function modificar(db, id, articulos, cuando = ahora()) {
+  const ap = buscarApartado(db, id);
+  if (ap.estado !== "pendiente") falla(`El apartado ya está ${ap.estado}; no se puede modificar`);
+  if (!articulos?.length) falla("El apartado necesita al menos una prenda; si el cliente no sigue, anúlelo");
+  if (articulos.some((a) => !(Number(a.cantidad) > 0) || Number(a.precio_unitario) < 0)) falla("Revise las cantidades y los precios del apartado");
+  const viejo = {}; const precioViejo = {}; const nuevo = {}; const precioNuevo = {};
+  for (const a of db.articulos.filter((x) => x.apartado_id === id)) { viejo[a.producto_id] = (viejo[a.producto_id] || 0) + a.cantidad; precioViejo[a.producto_id] ??= Number(a.precio_unitario); }
+  for (const a of articulos) { nuevo[a.producto_id] = (nuevo[a.producto_id] || 0) + Number(a.cantidad); if (a.precio_unitario != null) precioNuevo[a.producto_id] ??= Number(a.precio_unitario); }
+  for (const pid of [...new Set([...Object.keys(viejo), ...Object.keys(nuevo)])].sort()) {
+    const delta = (nuevo[pid] || 0) - (viejo[pid] || 0);
+    if (!delta) continue;
+    const p = producto(db, pid) || falla("Uno de los artículos ya no existe");
+    const precio = precioNuevo[pid] ?? precioViejo[pid] ?? p.precio_venta;
+    if (delta > 0) {
+      if (p.existencias < delta) falla(`Solo quedan ${p.existencias} de «${p.nombre}»${p.talla ? " talla " + p.talla : ""}`);
+      p.existencias -= delta; p.actualizado_en = cuando;
+      mover(db, { producto_id: p.id, tipo: "salida", motivo: "apartado", cantidad: delta, existencias_despues: p.existencias, precio_unitario: precio, referencia: ap.numero, apartado_id: ap.id }, cuando);
+    } else {
+      p.existencias -= delta; p.activo = true; p.actualizado_en = cuando;
+      mover(db, { producto_id: p.id, tipo: "entrada", motivo: "quitado", cantidad: -delta, existencias_despues: p.existencias, precio_unitario: precio, referencia: ap.numero, apartado_id: ap.id }, cuando);
+    }
+  }
+  db.articulos = db.articulos.filter((x) => x.apartado_id !== id);
+  ap.subtotal = 0;
+  for (const a of articulos) {
+    const p = producto(db, a.producto_id);
+    const cantidad = Number(a.cantidad);
+    const precio = a.precio_unitario != null ? Number(a.precio_unitario) : (precioViejo[a.producto_id] ?? p.precio_venta);
+    db.articulos.push({ id: uuid(), apartado_id: ap.id, producto_id: p.id, nombre: p.nombre, talla: p.talla, color: p.color, foto_path: p.foto_path, cantidad, precio_unitario: precio, costo_unitario: p.costo, subtotal: cantidad * precio });
+    ap.subtotal += cantidad * precio;
+  }
+  ap.total = total(ap);
+  return apartadoCon(db, ap);
+}
+
 function buscarApartado(db, id) {
   const ap = db.apartados.find((a) => a.id === id) || falla("El apartado no existe");
   return ap;
@@ -430,6 +466,7 @@ export const datosDemo = {
   }),
   crearApartado: (d) => cambiar((db) => apartar(db, d)),
   anularApartado: (id, motivo) => cambiar((db) => anular(db, id, motivo)),
+  modificarApartado: (id, articulos) => cambiar((db) => modificar(db, id, articulos)),
   facturas: () => consultar((db) => (db.facturas || []).slice().sort((a, b) => b.creado_en.localeCompare(a.creado_en)).map((f) => facturaCon(db, f))),
   factura: (id) => consultar((db) => { const f = (db.facturas || []).find((x) => x.id === id); return f ? facturaCon(db, f) : null; }),
   crearFactura: (d) => cambiar((db) => facturar(db, d)),

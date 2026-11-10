@@ -180,6 +180,8 @@ async function crearReal() {
       });
     },
     anularApartado: (id, motivo) => rpc("anular_apartado", { p_apartado_id: id, p_motivo: motivo || null }),
+    // Lista completa de prendas del apartado; la base ajusta el inventario por diferencia
+    modificarApartado: (id, articulos) => rpc("modificar_apartado", { p_apartado_id: id, p_articulos: articulos }),
     async editarApartado(id, cambios) {
       return respuesta(await sb.from("apartados").update(cambios).eq("id", id).select(LISTA_APARTADOS).single());
     },

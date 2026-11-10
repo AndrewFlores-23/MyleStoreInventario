@@ -153,7 +153,7 @@ async function vistaDetalle(_pagina, ctx, id) {
       franja(),
       el("div.dos-columnas",
         el("section.panel",
-          el("div.panel-titulo", el("h2", "Prendas apartadas")),
+          el("div.panel-titulo", el("h2", "Prendas apartadas"), pendiente ? el("button.btn.fantasma.chico", { type: "button", onclick: modificarPrendas }, icono("editar", "chico"), "Modificar") : null),
           el("div.lista", ap.articulos.map((a) => el("div.renglon",
             marcaProducto(a),
             el("div.renglon-cuerpo", el("div.renglon-titulo", a.nombre), el("div.renglon-sub", a.talla ? el("span.talla", a.talla) : null, a.color || "")),
@@ -254,6 +254,53 @@ async function vistaDetalle(_pagina, ctx, id) {
       } catch (e) {
         error.textContent = mensajeError(e);
         error.classList.remove("oculto");
+      }
+    });
+  }
+  // Quitar o agregar prendas mientras el apartado está pendiente: lo que se quita vuelve al inventario y lo nuevo se aparta ahora
+  async function modificarPrendas() {
+    await cargarProductos();
+    const porProducto = new Map();
+    for (const a of ap.articulos) {
+      const l = porProducto.get(a.producto_id);
+      if (l) l.cantidad += a.cantidad;
+      else porProducto.set(a.producto_id, {
+        producto: estado.productos.find((p) => p.id === a.producto_id) || { id: a.producto_id, nombre: a.nombre, talla: a.talla, color: a.color, existencias: 0, precio_venta: a.precio_unitario },
+        cantidad: a.cantidad, precio: a.precio_unitario,
+      });
+    }
+    const error = el("div.error-form.oculto");
+    const pedido = armarPedido({ inicial: [...porProducto.values()], envio: Number(ap.envio) || 0 });
+    const boton = el("button.btn.primario", { type: "button" }, "Guardar cambios");
+    const { cerrar } = abrirHoja({
+      titulo: `Prendas de ${ap.numero}`,
+      clase: "ancha",
+      cuerpo: el("div.pila.media",
+        el("p.suave", "Busque una prenda para agregarla, cambie las cantidades o quítelas con la ✕. Lo que quite vuelve al inventario y lo que agregue se aparta ahora."),
+        pedido.selector,
+        pedido.lineas,
+        pedido.totales,
+        error),
+      pie: [el("button.btn.fantasma", { type: "button", onclick: () => cerrar() }, "Volver"), boton],
+    });
+    boton.addEventListener("click", async () => {
+      error.classList.add("oculto");
+      if (pedido.vacio()) {
+        error.textContent = "El apartado necesita al menos una prenda. Si el cliente no sigue, anúlelo.";
+        error.classList.remove("oculto");
+        return;
+      }
+      try {
+        await trabajando(boton, () => datos.modificarApartado(ap.id, pedido.articulos()), "Guardando…");
+        cerrar();
+        await cargarProductos();
+        ap = await datos.apartado(ap.id);
+        pintar();
+        avisar("Prendas del apartado actualizadas");
+      } catch (e) {
+        error.textContent = mensajeError(e);
+        error.classList.remove("oculto");
+        await cargarProductos();
       }
     });
   }
