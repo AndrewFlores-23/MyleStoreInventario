@@ -3,7 +3,7 @@
 Sistema de inventario para una tienda de ropa que vende en línea desde casa. Funciona en el celular y en la compu.
 
 - **Ingresos:** cada entrada de mercadería lleva cantidad, precio de costo y precio de venta final, y recibe un **número de serie único** (`MS-00001`). Sirve para un producto nuevo o para reponer uno que ya existe. Con «Otra talla o color» se registra la misma prenda en otra talla sin volver a escribir todo.
-- **Inventario:** las prendas con su talla, color, precio y cuántas quedan disponibles. La ficha de cada una muestra su ganancia, las etiquetas de serie de cada ingreso (se vuelven a ver e imprimir las veces que haga falta) y todo su historial.
+- **Inventario:** las prendas con su talla, color, precio y cuántas quedan disponibles. La ficha de cada una muestra su ganancia, las etiquetas de serie de cada ingreso (se vuelven a ver e imprimir las veces que haga falta) y todo su historial. Si una prenda se registró por error, «Eliminar producto» la borra con sus ingresos y su historial, y la compra a la que pertenecía vuelve a tener esas prendas por registrar; solo se puede si nunca salió en un apartado ni en una factura (en ese caso se registra una salida por ajuste y se oculta).
 - **Cómo vamos (Inicio):** vendido hoy y en el mes (facturas de contado), ganancia del mes (vendido menos costo de las prendas y gastos), ganancia estimada del inventario, ganancia esperada de lo ingresado y gastos del mes.
 - **Guía:** en *Ajustes → Cómo usar el sistema* hay un recorrido animado de dos minutos (`guia.html`) con datos de ejemplo que explica cada parte; se reproduce solo, se pausa y se salta por escenas.
 - **Desde cualquier dispositivo:** todo se guarda en Supabase; en el dispositivo solo queda la sesión y el tema. Con el correo y la contraseña, los mismos datos aparecen en cualquier celular o computadora.
@@ -53,6 +53,7 @@ Al ser archivos estáticos, se puede publicar en GitHub Pages (*Settings → Pag
 ## Cómo se cuidan los datos
 
 - Las existencias solo cambian con las funciones de la base (`registrar_ingreso`, `registrar_salida`, `crear_apartado`, `anular_apartado`, `crear_factura`, `anular_factura`). Cada una deja su movimiento, así que el inventario siempre cuadra con el historial. Nadie puede cambiar existencias ni borrar movimientos a mano desde la app.
+- `eliminar_producto` es la única forma de borrar: quita el producto con sus ingresos y movimientos y descuenta esas prendas de sus compras, y se niega si el producto ya salió en un apartado, una factura o una venta.
 - Un apartado o una factura directa revisan primero que alcancen las existencias. Si no alcanzan, no se crean ni gastan número.
 - La factura pública solo se abre con su enlace secreto y no muestra costos ni notas internas.
 - «Cancelado» en la factura significa pagado, como se usa en Costa Rica. Para dejar sin efecto un apartado o una factura, la app dice «Anular».

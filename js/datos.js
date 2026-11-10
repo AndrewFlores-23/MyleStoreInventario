@@ -95,6 +95,12 @@ async function crearReal() {
     async guardarProducto(id, cambios) {
       return respuesta(await sb.from("productos").update(cambios).eq("id", id).select().single());
     },
+    // Borra un producto registrado por error con sus ingresos y su historial (la base revisa que no tenga ventas)
+    async eliminarProducto(id) {
+      const r = await rpc("eliminar_producto", { p_producto_id: id });
+      if (r?.foto_path) fotos.remove([r.foto_path]).catch(() => { /* una foto vieja suelta no estorba */ });
+      return r;
+    },
     async subirFoto(blob) {
       const ruta = `${new Date().toISOString().slice(0, 7)}/${crypto.randomUUID()}.jpg`;
       respuesta(await fotos.upload(ruta, blob, { contentType: "image/jpeg", cacheControl: "31536000", upsert: false }));

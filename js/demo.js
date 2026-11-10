@@ -124,6 +124,34 @@ function sacar(db, d, cuando = ahora()) {
   }, cuando);
 }
 
+// Eliminar un producto registrado por error: se va con sus ingresos y su historial, y las compras recuperan esas prendas.
+// Solo si nunca salió en un apartado, una factura o una venta.
+function eliminar(db, id) {
+  const p = producto(db, id) || falla("El producto ya no existe");
+  const aviso = " Si sobran unidades, registre una salida por ajuste de conteo y ocúltelo.";
+  const art = db.articulos.find((a) => a.producto_id === id);
+  if (art) falla(`No se puede eliminar «${p.nombre}»: ya salió en el apartado ${db.apartados.find((a) => a.id === art.apartado_id)?.numero}.${aviso}`);
+  const fart = (db.facturaArticulos || []).find((a) => a.producto_id === id);
+  if (fart) falla(`No se puede eliminar «${p.nombre}»: ya salió en la factura ${(db.facturas || []).find((f) => f.id === fart.factura_id)?.numero}.${aviso}`);
+  if (db.movimientos.some((m) => m.producto_id === id && (m.motivo === "venta" || m.apartado_id || m.factura_id))) falla(`No se puede eliminar «${p.nombre}»: ya tiene ventas registradas.${aviso}`);
+  const ingresos = db.ingresos.filter((i) => i.producto_id === id);
+  const compras = [];
+  for (const i of ingresos) {
+    const c = i.compra_id && (db.compras || []).find((x) => x.id === i.compra_id);
+    if (!c) continue;
+    c.unidades = Math.max(0, c.unidades - i.cantidad);
+    c.total = Math.max(0, Number(c.total) - i.cantidad * Number(i.costo_unitario));
+    if (!compras.includes(c)) compras.push(c);
+  }
+  db.movimientos = db.movimientos.filter((m) => m.producto_id !== id);
+  db.ingresos = db.ingresos.filter((i) => i.producto_id !== id);
+  db.productos = db.productos.filter((x) => x.id !== id);
+  return {
+    nombre: p.nombre, talla: p.talla, color: p.color, existencias: p.existencias, foto_path: p.foto_path, ingresos: ingresos.length,
+    compras: compras.map((c) => ({ id: c.id, numero: c.numero, faltan: Math.max(0, (c.prendas_pedidas || 0) - c.unidades) })).sort((a, b) => a.numero.localeCompare(b.numero)),
+  };
+}
+
 function apartar(db, d, cuando = ahora()) {
   if (!limpio(d.clienteNombre)) falla("Escriba el nombre del cliente");
   const articulos = d.articulos || [];
@@ -330,6 +358,7 @@ export const datosDemo = {
     if ((cambios.precio_venta !== undefined && Number(cambios.precio_venta) < 0) || (cambios.costo !== undefined && Number(cambios.costo) < 0)) falla("Revise los precios");
     return Object.assign(p, cambios, { actualizado_en: ahora() });
   }),
+  eliminarProducto: (id) => cambiar((db) => eliminar(db, id)),
   async subirFoto(blob) {
     const ruta = `demo/${uuid()}.jpg`;
     const dato = await fotoChica(blob);

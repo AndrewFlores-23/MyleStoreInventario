@@ -3,7 +3,7 @@ import { datos } from "../datos.js";
 import { estado, cargarProductos, ir } from "../estado.js";
 import { el, icono, dinero, talla, tela, colorTela, sinTildes, abrirHoja, avisar, mensajeError, trabajando, campoDinero, numero, confirmar,
   CATEGORIAS_COMUNES, COLORES_COMUNES } from "../util.js";
-import { renglonMovimiento, verEtiqueta, vacio } from "../componentes.js";
+import { renglonMovimiento, verEtiqueta, vacio, nombreCompleto } from "../componentes.js";
 
 const filtro = { texto: "", categoria: "", agotados: true, ocultos: false };
 
@@ -131,7 +131,8 @@ export async function abrirFicha(id, { alCambiar } = {}) {
         p.activo && p.existencias === 0
           ? el("button.btn.fantasma", { type: "button", onclick: ocultar }, icono("ojo"), "Ocultar del inventario")
           : null,
-        !p.activo ? el("button.btn.fantasma", { type: "button", onclick: mostrar }, icono("ojo"), "Volver a mostrar") : null));
+        !p.activo ? el("button.btn.fantasma", { type: "button", onclick: mostrar }, icono("ojo"), "Volver a mostrar") : null,
+        el("button.btn.peligro", { type: "button", onclick: eliminar }, icono("basura"), "Eliminar producto")));
 
     const etiquetas = el("section.ficha-historial",
       el("div.panel-titulo", el("h2", "Etiquetas de serie"), el("span.tenue", { style: "font-size:13px" }, "Toque una para verla o imprimirla")),
@@ -206,6 +207,37 @@ export async function abrirFicha(id, { alCambiar } = {}) {
       await datos.guardarProducto(p.id, { activo: true });
       avisar("El producto vuelve a salir en el inventario");
       await refrescar();
+    } catch (e) {
+      avisar(mensajeError(e), "error");
+    }
+  };
+
+  // Eliminar: para lo que se registró por error. Se va con sus ingresos y su historial, y las compras recuperan esas prendas.
+  // Si ya salió en un apartado o una factura, el historial se conserva y la salida es registrar un ajuste y ocultarlo.
+  const eliminar = async () => {
+    if ((movimientos || []).some((m) => m.apartado_id || m.factura_id || m.motivo === "venta")) {
+      const { cerrar: cerrarAviso } = abrirHoja({
+        titulo: "No se puede eliminar",
+        clase: "chica",
+        cuerpo: el("p.suave", `«${p.nombre}» ya salió en un apartado o en una factura, así que su historial se conserva. Si sobran unidades mal registradas, registre una salida por ajuste de conteo y, cuando quede en cero, ocúltelo del inventario.`),
+        pie: [el("button.btn.primario", { type: "button", onclick: () => cerrarAviso() }, "Entendido")],
+      });
+      return;
+    }
+    const n = ingresos?.length ?? 0;
+    const conCompra = (ingresos || []).some((i) => i.compra_id);
+    const seguir = await confirmar("¿Eliminar este producto?", {
+      detalle: `Se borra ${nombreCompleto(p)} con ${n === 1 ? "su ingreso" : `sus ${n} ingresos`}, sus ${p.existencias} ${p.existencias === 1 ? "unidad" : "unidades"} y todo su historial, como si nunca se hubiera registrado.${conCompra ? " Las compras a las que pertenecían esos ingresos vuelven a tener esas prendas por registrar." : ""} No se puede deshacer.`,
+      si: "Eliminar", peligro: true,
+    });
+    if (!seguir) return;
+    try {
+      const r = await datos.eliminarProducto(p.id);
+      await cargarProductos();
+      cerrar();
+      if (alCambiar) alCambiar(); else window.dispatchEvent(new Event("hashchange"));
+      const compras = (r?.compras || []).map((c) => `${c.numero}: ${c.faltan ? `faltan ${c.faltan} por registrar` : "compra completa"}`);
+      avisar(`Producto eliminado${compras.length ? " · " + compras.join(" · ") : ""}`);
     } catch (e) {
       avisar(mensajeError(e), "error");
     }
