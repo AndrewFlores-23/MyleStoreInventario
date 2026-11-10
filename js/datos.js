@@ -152,6 +152,8 @@ async function crearReal() {
     async editarCompra(id, cambios) {
       return respuesta(await sb.from("compras").update(cambios).eq("id", id).select().single());
     },
+    // Borra una compra sin prendas registradas (si tiene, la base se niega)
+    eliminarCompra: (id) => rpc("eliminar_compra", { p_compra_id: id }),
     registrarSalida(d) {
       return rpc("registrar_salida", {
         p_producto_id: d.productoId, p_cantidad: d.cantidad, p_motivo: d.motivo, p_precio: d.precio ?? null, p_nota: d.nota || null,

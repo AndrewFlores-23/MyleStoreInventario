@@ -2,7 +2,7 @@
 // Salidas (qué salió, cuándo y por qué) y Todo (entradas y salidas en orden), con filtros por mes y por producto.
 import { datos } from "../datos.js";
 import { estado, cargarProductos } from "../estado.js";
-import { el, icono, dinero, fecha, talla, tela, numero, abrirHoja, campoDinero, contador, trabajando, avisar, mensajeError } from "../util.js";
+import { el, icono, dinero, fecha, talla, tela, numero, abrirHoja, campoDinero, contador, trabajando, avisar, mensajeError, confirmar } from "../util.js";
 import { marcaProducto, renglonMovimiento, selectorProducto, productoElegido, vacio, MOTIVOS } from "../componentes.js";
 import { abrirFicha } from "./inventario.js";
 import { selectorProveedor } from "./proveedores.js";
@@ -244,7 +244,9 @@ async function vistaCompra(_pagina, ctx, id) {
         el("div",
           el("h1", c.proveedor || "Compra sin proveedor"),
           el("div.renglon-sub", { style: "margin-top:6px" }, el("span.serie", c.numero), c.factura ? el("span", `Factura ${c.factura}`) : null, el("span.tenue", fecha(c.fecha_compra || c.creado_en)))),
-        el("div.acciones", el("button.btn.chico", { type: "button", onclick: editar }, icono("editar", "chico"), "Editar"))),
+        el("div.acciones",
+          el("button.btn.chico", { type: "button", onclick: editar }, icono("editar", "chico"), "Editar"),
+          el("button.btn.chico.peligro", { type: "button", onclick: eliminar }, icono("basura", "chico"), "Eliminar"))),
       completa
         ? el("div.franja-estado.vendido", icono("check"), el("div", el("strong", "Compra completa"), el("span", `${c.unidades} prendas registradas en el inventario`)))
         : el("div.franja-estado.pendiente", icono("ingreso"), el("div",
@@ -313,5 +315,30 @@ async function vistaCompra(_pagina, ctx, id) {
       }
     });
   }
+
+  // Eliminar: solo una compra sin prendas registradas (una repetida, por ejemplo). Si tiene prendas, primero se eliminan desde su ficha.
+  const eliminar = async () => {
+    if (c.ingresos.length) {
+      const { cerrar } = abrirHoja({
+        titulo: "No se puede eliminar",
+        clase: "chica",
+        cuerpo: el("p.suave", `La compra ${c.numero} tiene ${c.unidades} ${c.unidades === 1 ? "prenda registrada" : "prendas registradas"} en el inventario. Si se registraron por error, elimínelas primero desde la ficha de cada una; cuando la compra quede vacía se podrá borrar.`),
+        pie: [el("button.btn.primario", { type: "button", onclick: () => cerrar() }, "Entendido")],
+      });
+      return;
+    }
+    const seguir = await confirmar("¿Eliminar esta compra?", {
+      detalle: `Se borra la compra ${c.numero}${c.proveedor ? ` de ${c.proveedor}` : ""}${c.factura ? ` (factura ${c.factura})` : ""}: ${c.prendas_pedidas} ${c.prendas_pedidas === 1 ? "prenda pactada" : "prendas pactadas"} y ${dinero(c.monto_pagado)} pagados. No tiene prendas registradas, así que el inventario no cambia. No se puede deshacer.`,
+      si: "Eliminar", peligro: true,
+    });
+    if (!seguir) return;
+    try {
+      await datos.eliminarCompra(c.id);
+      avisar(`Compra ${c.numero} eliminada`);
+      location.hash = "#/movimientos/compras";
+    } catch (e) {
+      avisar(mensajeError(e), "error");
+    }
+  };
   pintar();
 }

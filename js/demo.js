@@ -109,6 +109,15 @@ function abrirCompra(db, d, cuando = ahora()) {
   return c;
 }
 
+// Eliminar una compra abierta por error: solo si no tiene prendas registradas
+function eliminarCompra(db, id) {
+  const c = (db.compras || []).find((x) => x.id === id) || falla("La compra ya no existe");
+  const n = db.ingresos.filter((i) => i.compra_id === id).reduce((s, i) => s + i.cantidad, 0);
+  if (n > 0) falla(`No se puede eliminar la compra ${c.numero}: tiene ${n} ${n === 1 ? "prenda registrada" : "prendas registradas"} en el inventario. Si se registraron por error, elimine primero esas prendas desde su ficha.`);
+  db.compras = db.compras.filter((x) => x.id !== id);
+  return { numero: c.numero, proveedor: c.proveedor, factura: c.factura };
+}
+
 function sacar(db, d, cuando = ahora()) {
   const cantidad = Number(d.cantidad);
   if (!["venta", "danado", "devolucion", "regalo", "ajuste"].includes(d.motivo)) falla("Elija el motivo de la salida");
@@ -398,6 +407,7 @@ export const datosDemo = {
     if (cambios.fecha_compra) nuevo.fecha_compra = cambios.fecha_compra;
     return Object.assign(c, nuevo);
   }),
+  eliminarCompra: (id) => cambiar((db) => eliminarCompra(db, id)),
   ingresos: ({ productoId, limite = 200 } = {}) => consultar((db) => db.ingresos
     .filter((i) => !productoId || i.producto_id === productoId)
     .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
