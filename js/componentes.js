@@ -102,10 +102,19 @@ export function cajaDias(ap) {
 }
 
 export const unidades = (articulos) => (articulos || []).reduce((s, a) => s + Number(a.cantidad), 0);
-// Lo que costaron las prendas de una factura y lo que dejaron: precio final menos costo, menos el descuento (el envío no cuenta)
-export const costoFactura = (f) => (f.articulos || []).reduce((s, a) => s + Number(a.cantidad) * Number(a.costo_unitario || 0), 0);
-export const gananciaFactura = (f) =>
-  (f.articulos || []).reduce((s, a) => s + Number(a.subtotal ?? a.cantidad * a.precio_unitario), 0) - Number(f.descuento || 0) - costoFactura(f);
+// Estas cuatro facturas se hicieron con el envío cargado como prenda (un producto «Envío»). No se tocan para no cambiar el
+// historial, pero en las cuentas ese artículo se toma como envío. Solo estas: de aquí en adelante el envío va en su casilla.
+const ENVIO_COMO_PRENDA = ["FC-0036", "FC-0037", "FC-0041", "FC-0042"];
+const esEnvioComoPrenda = (f, a) => ENVIO_COMO_PRENDA.includes(f.numero) && /^env[ií]o$/i.test(String(a.nombre || "").trim());
+const prendasDe = (f) => (f.articulos || []).filter((a) => !esEnvioComoPrenda(f, a));
+const subtotalDe = (a) => Number(a.subtotal ?? a.cantidad * a.precio_unitario);
+export const prendasFactura = (f) => unidades(prendasDe(f));
+// Una factura se reparte así: total = venta de las prendas (ya con el descuento) + envío
+export const envioFactura = (f) => Number(f.envio || 0) + (f.articulos || []).filter((a) => esEnvioComoPrenda(f, a)).reduce((s, a) => s + subtotalDe(a), 0);
+export const ventaPrendas = (f) => prendasDe(f).reduce((s, a) => s + subtotalDe(a), 0) - Number(f.descuento || 0);
+// Lo que costaron las prendas y lo que dejaron: venta de las prendas menos su costo (el envío no cuenta)
+export const costoFactura = (f) => prendasDe(f).reduce((s, a) => s + Number(a.cantidad) * Number(a.costo_unitario || 0), 0);
+export const gananciaFactura = (f) => ventaPrendas(f) - costoFactura(f);
 
 // ---------- Historial ----------
 export function renglonMovimiento(m, { alAbrir, mostrarProducto = true } = {}) {

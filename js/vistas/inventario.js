@@ -37,10 +37,12 @@ export async function vistaInventario(pagina, ctx) {
 
     const u = lista.reduce((s, p) => s + p.existencias, 0);
     const v = lista.reduce((s, p) => s + p.existencias * Number(p.precio_venta), 0);
+    const c = lista.reduce((s, p) => s + p.existencias * Number(p.costo), 0);
     totales.replaceChildren(
       el("span", el("b", lista.length), ` producto${lista.length === 1 ? "" : "s"}`),
       el("span", el("b", u), ` unidad${u === 1 ? "" : "es"} disponible${u === 1 ? "" : "s"}`),
-      el("span", "valor de venta ", el("b", dinero(v))));
+      el("span", "valor de venta ", el("b", dinero(v))),
+      el("span", "valor a costo ", el("b", dinero(c))));
 
     if (!estado.productos.length) {
       rejilla.replaceChildren(vacio("percha", "Todavía no hay productos.", "Cada producto entra con su primer ingreso: talla, color, cantidad y precios.",
@@ -123,7 +125,8 @@ export async function abrirFicha(id, { alCambiar } = {}) {
         linea("Precio de venta", dinero(p.precio_venta)),
         linea("Costo (último ingreso)", dinero(p.costo)),
         linea("Ganancia por unidad", `${dinero(ganancia)} · ${margen} %`, ganancia < 0 ? ".urgente" : ""),
-        linea("En inventario a precio de venta", dinero(p.existencias * Number(p.precio_venta)))),
+        linea("En inventario a precio de venta", dinero(p.existencias * Number(p.precio_venta))),
+        linea("En inventario a costo", dinero(p.existencias * Number(p.costo)))),
       el("div.fila-botones.ficha-acciones",
         el("button.btn.primario", { type: "button", onclick: () => { cerrar(); ir(`ingresos?producto=${p.id}`); } }, icono("ingreso"), "Ingresar más"),
         el("button.btn", { type: "button", disabled: p.existencias === 0, onclick: () => { cerrar(); ir(`salidas?producto=${p.id}`); } }, icono("salida"), "Registrar salida"),

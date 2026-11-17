@@ -4,7 +4,7 @@ import { datos } from "../datos.js";
 import { estado, cargarProductos, ir } from "../estado.js";
 import { el, icono, dinero, fecha, fechaHora, hace, sinTildes, telefonoBonito, mismoMes, esHoy, nombreMes,
   trabajando, avisar, mensajeError, abrirHoja } from "../util.js";
-import { marcaProducto, sellosFactura, unidades, costoFactura, gananciaFactura, vacio } from "../componentes.js";
+import { marcaProducto, sellosFactura, unidades, prendasFactura, costoFactura, envioFactura, ventaPrendas, gananciaFactura, vacio } from "../componentes.js";
 import { armarFactura, imprimirFactura } from "../factura.js";
 import { imagenFactura, compartirImagen, descargarImagen } from "../factura-imagen.js";
 import { armarPedido, camposCliente } from "./pedido.js";
@@ -45,13 +45,17 @@ async function vistaLista(_pagina, ctx) {
       const texto = sinTildes([f.numero, f.cliente_nombre, f.cliente_telefono, f.forma_pago].join(" "));
       return palabras.every((w) => texto.includes(w));
     });
-    const monto = elegidas.reduce((s, f) => s + Number(f.total), 0);
+    // Vendido es solo lo de las prendas; los envíos se suman aparte (en anuladas se muestra el total de cada factura)
+    const monto = elegidas.reduce((s, f) => s + (filtroLista === "anuladas" ? Number(f.total) : ventaPrendas(f)), 0);
+    const envios = elegidas.reduce((s, f) => s + envioFactura(f), 0);
     const ganancia = elegidas.reduce((s, f) => s + gananciaFactura(f), 0);
-    resumen.replaceChildren(
+    resumen.replaceChildren(...[
       el("span", el("b", elegidas.length), ` factura${elegidas.length === 1 ? "" : "s"}`),
-      el("span", el("b", unidades(elegidas.flatMap((f) => f.articulos))), " prendas"),
+      el("span", el("b", elegidas.reduce((s, f) => s + prendasFactura(f), 0)), " prendas"),
       el("span", filtroLista === "anuladas" ? "anulado " : "vendido ", el("b", dinero(monto))),
-      filtroLista === "anuladas" ? null : el("span", "ganancia ", el("b", dinero(ganancia))));
+      envios && filtroLista !== "anuladas" ? el("span", "envíos ", el("b", dinero(envios))) : null,
+      filtroLista === "anuladas" ? null : el("span", "ganancia de las prendas ", el("b", dinero(ganancia))),
+    ].filter(Boolean));
     lista.replaceChildren(...(elegidas.length ? elegidas.map(fila) : [
       facturas.length
         ? vacio("billete", "No hay facturas aquí.")
@@ -65,7 +69,7 @@ async function vistaLista(_pagina, ctx) {
     el("div.renglon-cuerpo",
       el("div.renglon-titulo", f.cliente_nombre),
       el("div.renglon-sub", sellosFactura(f), f.apartado ? el("span.tenue", `de ${f.apartado.numero}`) : null),
-      el("div.renglon-sub.tenue", el("span.numero", f.numero), `${unidades(f.articulos)} prendas · ${fecha(f.creado_en)}${f.forma_pago ? ` · ${f.forma_pago}` : ""}`)),
+      el("div.renglon-sub.tenue", el("span.numero", f.numero), `${prendasFactura(f)} prenda${prendasFactura(f) === 1 ? "" : "s"} · ${fecha(f.creado_en)}${f.forma_pago ? ` · ${f.forma_pago}` : ""}`)),
     el("div.renglon-fin", el("div.num", dinero(f.total)), el("small", f.estado === "anulada" ? "anulada" : "cobrado")));
 
   const buscar = el("input", { type: "search", placeholder: "Buscar cliente, número o forma de pago", value: textoLista, oninput: (e) => { textoLista = e.target.value; pintar(); } });
@@ -176,10 +180,10 @@ async function vistaDetalle(_pagina, ctx, id) {
   };
 
   const franja = () => {
-    const n = unidades(f.articulos);
+    const n = prendasFactura(f);
     const prendas = `${n} prenda${n === 1 ? "" : "s"}`;
     if (f.estado === "anulada") return el("div.franja-estado.anulado", icono("anular"), el("div", el("strong", "Anulada"), el("span", `${fecha(f.anulada_en)} · ${prendas} de vuelta al inventario`)));
-    return el("div.franja-estado.vendido", icono("check"), el("div", el("strong", `Cobrado · ${dinero(f.total)}`), el("span", `${prendas} · ${f.forma_pago || "pagado"} · ganancia ${dinero(gananciaFactura(f))} · ${hace(f.creado_en)}`)));
+    return el("div.franja-estado.vendido", icono("check"), el("div", el("strong", `Cobrado · ${dinero(f.total)}`), el("span", `${prendas}${envioFactura(f) ? ` + envío ${dinero(envioFactura(f))}` : ""} · ${f.forma_pago || "pagado"} · ganancia ${dinero(gananciaFactura(f))} · ${hace(f.creado_en)}`)));
   };
 
   const pintar = () => {

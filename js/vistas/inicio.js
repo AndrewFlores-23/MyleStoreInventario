@@ -1,11 +1,13 @@
 // Inicio: cómo va la tienda, el recorrido, qué falta por facturar y lo último que se movió
 import { datos } from "../datos.js";
 import { estado, cargarProductos, ponerPendientes } from "../estado.js";
-import { el, icono, dinero, mismoMes, esHoy, nombreMes, talla } from "../util.js";
-import { marcaProducto, sellosApartado, cajaDias, renglonMovimiento, unidades, costoFactura, gananciaFactura, vacio } from "../componentes.js";
+import { el, icono, dinero, fecha, mismoMes, esHoy, nombreMes, talla } from "../util.js";
+import { marcaProducto, sellosApartado, cajaDias, renglonMovimiento, unidades, prendasFactura, costoFactura, envioFactura, ventaPrendas, gananciaFactura, vacio } from "../componentes.js";
 import { abrirFicha } from "./inventario.js";
 
 const suma = (lista, fn) => lista.reduce((s, x) => s + fn(x), 0);
+const facturasTxt = (n) => `${n} factura${n === 1 ? "" : "s"}`;
+const prendasTxt = (n) => `${n} prenda${n === 1 ? "" : "s"}`;
 const linea = (et, val, clase = "", detalle) =>
   el("div.linea", el("span.et", et), el("span.puntos"), el("span.val" + clase, val, detalle ? el("small", detalle) : null));
 
@@ -29,24 +31,27 @@ export async function vistaInicio(_pagina, ctx) {
   const pendientes = apartados.filter((a) => a.estado === "pendiente").sort((a, b) => a.creado_en.localeCompare(b.creado_en));
   const porFacturar = suma(pendientes, (a) => Number(a.total));
   const emitidas = facturas.filter((f) => f.estado === "emitida");
-  const facturadoMes = suma(emitidas.filter((f) => mismoMes(f.creado_en)), (f) => Number(f.total));
 
-  // Cómo vamos: lo facturado hoy y en el mes, los gastos y la ganancia de lo ingresado
-  const facturadoHoy = suma(emitidas.filter((f) => esHoy(f.creado_en)), (f) => Number(f.total));
-  const ventasNumHoy = emitidas.filter((f) => esHoy(f.creado_en)).length;
-  const ventasNumMes = emitidas.filter((f) => mismoMes(f.creado_en)).length;
+  // Cada grupo de facturas se lee igual: vendido = solo las prendas (ya con el descuento), los envíos van aparte,
+  // y la ganancia = vendido − costo de esas prendas. Solo cuentan las facturas emitidas: un apartado no suma hasta facturarse
+  const resumir = (lista) => ({
+    n: lista.length,
+    vendido: suma(lista, ventaPrendas),
+    prendas: suma(lista, prendasFactura),
+    envios: suma(lista, envioFactura),
+    costo: suma(lista, costoFactura),
+    ganancia: suma(lista, gananciaFactura),
+  });
+  const total = resumir(emitidas);
+  const mesV = resumir(emitidas.filter((f) => mismoMes(f.creado_en)));
+  const hoyV = resumir(emitidas.filter((f) => esHoy(f.creado_en)));
+  const conEnvio = emitidas.filter((f) => envioFactura(f) > 0);
   const enDia = (g) => g.fecha + "T12:00:00-06:00";
-  const gastosMes = suma(gastos.filter((g) => mismoMes(enDia(g))), (g) => Number(g.monto));
+  const gastosDelMes = gastos.filter((g) => mismoMes(enDia(g))).sort((a, b) => Number(b.monto) - Number(a.monto));
+  const gastosMes = suma(gastosDelMes, (g) => Number(g.monto));
   const gastosHoy = suma(gastos.filter((g) => esHoy(enDia(g))), (g) => Number(g.monto));
-  // Ganancia real del mes: lo vendido menos lo que costaron esas prendas, menos los gastos
-  const costoVendidoMes = suma(emitidas.filter((f) => mismoMes(f.creado_en)).flatMap((f) => f.articulos), (a) => a.cantidad * Number(a.costo_unitario || 0));
-  const gananciaMes = facturadoMes - costoVendidoMes - gastosMes;
-  // Todo lo facturado desde el primer día: la plata que tiene que haber y lo que dejaron las prendas (precio final − costo)
-  const vendidoTotal = suma(emitidas, (f) => Number(f.total));
-  const enviosTotal = suma(emitidas, (f) => Number(f.envio || 0));
-  const gananciaVendido = suma(emitidas, gananciaFactura);
-  const costoVendido = suma(emitidas, costoFactura);
-  const prendasVendidas = unidades(emitidas.flatMap((f) => f.articulos));
+  // Ganancia del mes: lo que dejaron las prendas, más los envíos cobrados, menos los gastos (ahí van los envíos pagados)
+  const gananciaMes = mesV.ganancia + mesV.envios - gastosMes;
   const desde = facturas.length >= 500 ? " (últimas 500 facturas)" : "";
   const delMes = ingresosMes.filter((i) => mismoMes(i.creado_en));
   const invertidoMes = suma(delMes, (i) => i.cantidad * Number(i.costo_unitario));
@@ -98,18 +103,39 @@ export async function vistaInicio(_pagina, ctx) {
   const comoVamos = el("section.panel.como-vamos",
     el("div.panel-titulo", el("h2", "Cómo vamos"), el("a", { href: "#/facturacion" }, "Ver ventas →")),
     el("div.cifras",
-      cifra("Vendido en total", dinero(vendidoTotal), emitidas.length
-        ? `La plata que tiene que haber de ${emitidas.length} factura${emitidas.length === 1 ? "" : "s"}${enviosTotal ? `, con ${dinero(enviosTotal)} de envíos` : ""}${desde}`
-        : "Todavía no hay facturas", vendidoTotal > 0 ? ".listo" : ""),
-      cifra("Ganancia de lo vendido", dinero(gananciaVendido), prendasVendidas
-        ? `${prendasVendidas} prenda${prendasVendidas === 1 ? "" : "s"} facturada${prendasVendidas === 1 ? "" : "s"}: precio final menos costo (${dinero(costoVendido)})${desde}`
-        : "Sale de cada factura: precio final menos costo", gananciaVendido >= 0 ? ".acento" : ".urgente"),
-      cifra("Vendido hoy", dinero(facturadoHoy), ventasNumHoy ? `${ventasNumHoy} venta${ventasNumHoy === 1 ? "" : "s"}${gastosHoy ? ` · gastos ${dinero(gastosHoy)}` : ""}` : "Todavía nada hoy", facturadoHoy > 0 ? ".listo" : ""),
-      cifra(`Vendido en ${mes}`, dinero(facturadoMes), `${ventasNumMes} factura${ventasNumMes === 1 ? "" : "s"} de contado`),
-      cifra(`Ganancia de ${mes}`, dinero(gananciaMes), `Vendido menos costo de las prendas (${dinero(costoVendidoMes)}) y gastos (${dinero(gastosMes)})`, gananciaMes >= 0 ? ".acento" : ".urgente"),
-      cifra(`Gastos de ${mes}`, dinero(gastosMes), gastos.length ? `${gastos.filter((g) => mismoMes(enDia(g))).length} gasto${gastos.filter((g) => mismoMes(enDia(g))).length === 1 ? "" : "s"} · cinta, gasolina, envíos…` : "Sin gastos registrados", gastosMes > 0 ? ".urgente" : ""),
-      cifra("Ganancia del inventario", dinero(valorVenta - valorCosto), `Si se vende todo lo que hay: ${dinero(valorVenta)} a la venta, costó ${dinero(valorCosto)}`),
-      cifra(`Ingresado en ${mes}`, dinero(esperadoMes - invertidoMes), prendasMes ? `Ganancia esperada de ${prendasMes} prendas: invertido ${dinero(invertidoMes)}, a la venta ${dinero(esperadoMes)}` : "Sin ingresos este mes")));
+      cifra("Vendido en total", dinero(total.vendido), total.n
+        ? `${prendasTxt(total.prendas)} en ${facturasTxt(total.n)}, sin envíos${desde}`
+        : "Todavía no hay facturas", total.vendido > 0 ? ".listo" : ""),
+      cifra("Ganancia de lo vendido", dinero(total.ganancia), total.prendas
+        ? `Vendido ${dinero(total.vendido)} − costo de las prendas ${dinero(total.costo)}${desde}`
+        : "Sale de cada factura: lo vendido menos el costo de las prendas", total.ganancia >= 0 ? ".acento" : ".urgente"),
+      cifra("Vendido hoy", dinero(hoyV.vendido), hoyV.n ? `${prendasTxt(hoyV.prendas)} en ${facturasTxt(hoyV.n)}${gastosHoy ? ` · gastos ${dinero(gastosHoy)}` : ""}` : "Todavía nada hoy", hoyV.vendido > 0 ? ".listo" : ""),
+      cifra(`Vendido en ${mes}`, dinero(mesV.vendido), mesV.n ? `${prendasTxt(mesV.prendas)} en ${facturasTxt(mesV.n)}, sin envíos` : "Todavía no hay facturas este mes"),
+      cifra(`Ganancia de ${mes}`, dinero(gananciaMes), `Prendas ${dinero(mesV.ganancia)}${mesV.envios ? ` + envíos ${dinero(mesV.envios)}` : ""} − gastos ${dinero(gastosMes)}`, gananciaMes >= 0 ? ".acento" : ".urgente"),
+      cifra(`Gastos de ${mes}`, dinero(gastosMes), gastosDelMes.length
+        ? `${gastosDelMes.length} gasto${gastosDelMes.length === 1 ? "" : "s"}: ${gastosDelMes.slice(0, 3).map((g) => g.descripcion || g.categoria).join(", ")}${gastosDelMes.length > 3 ? "…" : ""}`
+        : "Sin gastos este mes", gastosMes > 0 ? ".urgente" : ""),
+      cifra("Ganancia del inventario", dinero(valorVenta - valorCosto), unidadesDisponibles
+        ? `Si se venden las ${prendasTxt(unidadesDisponibles)} que quedan: ${dinero(valorVenta)} a la venta − ${dinero(valorCosto)} de costo`
+        : "No quedan prendas disponibles"),
+      cifra(`Invertido en ${mes}`, dinero(invertidoMes), prendasMes
+        ? `${prendasTxt(prendasMes)} ingresadas: a la venta ${dinero(esperadoMes)}, ganancia esperada ${dinero(esperadoMes - invertidoMes)}`
+        : "Sin mercadería ingresada este mes"),
+      // Los envíos, aparte de lo vendido: un botón con cuántos hay que despliega cada uno con su factura
+      el("details.cifra.ancha.envios",
+        el("summary",
+          el("span", icono("entrega", "chico"), el("b", conEnvio.length), ` envío${conEnvio.length === 1 ? "" : "s"} cobrado${conEnvio.length === 1 ? "" : "s"}`),
+          icono("atras", "chico flecha")),
+        el("div.envios-lista",
+          conEnvio.map((f) => el("a.envio-fila", { href: `#/facturacion/${f.id}` },
+            el("div",
+              el("div.envio-titulo", el("span.mono", f.numero), ` · ${f.cliente_nombre}`),
+              el("div.envio-sub", [fecha(f.creado_en), f.forma_pago, f.apartado && `de ${f.apartado.numero}`].filter(Boolean).join(" · "))),
+            el("b.num", dinero(envioFactura(f))))),
+          conEnvio.length ? el("div.envios-total", el("span", "Total en envíos"), el("b.num", dinero(total.envios))) : null,
+          el("p.envios-nota", conEnvio.length
+            ? `Solo facturas emitidas${desde}: un envío cuenta hasta que su apartado se factura.`
+            : "Todavía no hay envíos facturados. Un envío cuenta hasta que su apartado se factura.")))));
 
   ctx.pintar(
     el("div.cabeza",
@@ -128,14 +154,15 @@ export async function vistaInicio(_pagina, ctx) {
         el("div.recibo",
           linea("Unidades disponibles", unidadesDisponibles),
           linea("Productos con existencias", conExistencias.length, "", `de ${productos.length}`),
-          linea("Valor a costo", dinero(valorCosto)),
           linea("Valor a precio de venta", dinero(valorVenta)),
+          linea("Valor a costo", dinero(valorCosto)),
           linea("Ganancia esperada", dinero(valorVenta - valorCosto), ".acento"))),
       el("section.panel",
         el("div.panel-titulo", el("h2", "Ventas y apartados"), el("a", { href: "#/facturacion" }, "Ver facturas →")),
         el("div.recibo",
           linea("Apartados por facturar", pendientes.length, pendientes.length ? ".aviso" : "", `${dinero(porFacturar)} · ${unidades(pendientes.flatMap((a) => a.articulos))} prendas`),
-          linea(`Facturado en ${mes}`, dinero(facturadoMes), facturadoMes ? ".listo" : "", `${emitidas.filter((f) => mismoMes(f.creado_en)).length} facturas`),
+          linea(`Vendido en ${mes}`, dinero(mesV.vendido), mesV.vendido ? ".listo" : "", facturasTxt(mesV.n)),
+          linea(`Envíos en ${mes}`, dinero(mesV.envios)),
           linea(`Gastos en ${mes}`, dinero(gastosMes), gastosMes ? ".urgente" : ""),
           linea(`Ganancia de ${mes}`, dinero(gananciaMes), gananciaMes >= 0 ? ".acento" : ".urgente", null)))),
     el("div.dos-columnas.iguales",
