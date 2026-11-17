@@ -2,7 +2,7 @@
 import { datos } from "../datos.js";
 import { estado, cargarProductos, ponerPendientes } from "../estado.js";
 import { el, icono, dinero, mismoMes, esHoy, nombreMes, talla } from "../util.js";
-import { marcaProducto, sellosApartado, cajaDias, renglonMovimiento, unidades, vacio } from "../componentes.js";
+import { marcaProducto, sellosApartado, cajaDias, renglonMovimiento, unidades, costoFactura, gananciaFactura, vacio } from "../componentes.js";
 import { abrirFicha } from "./inventario.js";
 
 const suma = (lista, fn) => lista.reduce((s, x) => s + fn(x), 0);
@@ -41,6 +41,13 @@ export async function vistaInicio(_pagina, ctx) {
   // Ganancia real del mes: lo vendido menos lo que costaron esas prendas, menos los gastos
   const costoVendidoMes = suma(emitidas.filter((f) => mismoMes(f.creado_en)).flatMap((f) => f.articulos), (a) => a.cantidad * Number(a.costo_unitario || 0));
   const gananciaMes = facturadoMes - costoVendidoMes - gastosMes;
+  // Todo lo facturado desde el primer día: la plata que tiene que haber y lo que dejaron las prendas (precio final − costo)
+  const vendidoTotal = suma(emitidas, (f) => Number(f.total));
+  const enviosTotal = suma(emitidas, (f) => Number(f.envio || 0));
+  const gananciaVendido = suma(emitidas, gananciaFactura);
+  const costoVendido = suma(emitidas, costoFactura);
+  const prendasVendidas = unidades(emitidas.flatMap((f) => f.articulos));
+  const desde = facturas.length >= 500 ? " (últimas 500 facturas)" : "";
   const delMes = ingresosMes.filter((i) => mismoMes(i.creado_en));
   const invertidoMes = suma(delMes, (i) => i.cantidad * Number(i.costo_unitario));
   const esperadoMes = suma(delMes, (i) => i.cantidad * Number(i.precio_venta));
@@ -91,12 +98,18 @@ export async function vistaInicio(_pagina, ctx) {
   const comoVamos = el("section.panel.como-vamos",
     el("div.panel-titulo", el("h2", "Cómo vamos"), el("a", { href: "#/facturacion" }, "Ver ventas →")),
     el("div.cifras",
+      cifra("Vendido en total", dinero(vendidoTotal), emitidas.length
+        ? `La plata que tiene que haber de ${emitidas.length} factura${emitidas.length === 1 ? "" : "s"}${enviosTotal ? `, con ${dinero(enviosTotal)} de envíos` : ""}${desde}`
+        : "Todavía no hay facturas", vendidoTotal > 0 ? ".listo" : ""),
+      cifra("Ganancia de lo vendido", dinero(gananciaVendido), prendasVendidas
+        ? `${prendasVendidas} prenda${prendasVendidas === 1 ? "" : "s"} facturada${prendasVendidas === 1 ? "" : "s"}: precio final menos costo (${dinero(costoVendido)})${desde}`
+        : "Sale de cada factura: precio final menos costo", gananciaVendido >= 0 ? ".acento" : ".urgente"),
       cifra("Vendido hoy", dinero(facturadoHoy), ventasNumHoy ? `${ventasNumHoy} venta${ventasNumHoy === 1 ? "" : "s"}${gastosHoy ? ` · gastos ${dinero(gastosHoy)}` : ""}` : "Todavía nada hoy", facturadoHoy > 0 ? ".listo" : ""),
       cifra(`Vendido en ${mes}`, dinero(facturadoMes), `${ventasNumMes} factura${ventasNumMes === 1 ? "" : "s"} de contado`),
       cifra(`Ganancia de ${mes}`, dinero(gananciaMes), `Vendido menos costo de las prendas (${dinero(costoVendidoMes)}) y gastos (${dinero(gastosMes)})`, gananciaMes >= 0 ? ".acento" : ".urgente"),
+      cifra(`Gastos de ${mes}`, dinero(gastosMes), gastos.length ? `${gastos.filter((g) => mismoMes(enDia(g))).length} gasto${gastos.filter((g) => mismoMes(enDia(g))).length === 1 ? "" : "s"} · cinta, gasolina, envíos…` : "Sin gastos registrados", gastosMes > 0 ? ".urgente" : ""),
       cifra("Ganancia del inventario", dinero(valorVenta - valorCosto), `Si se vende todo lo que hay: ${dinero(valorVenta)} a la venta, costó ${dinero(valorCosto)}`),
-      cifra(`Ingresado en ${mes}`, dinero(esperadoMes - invertidoMes), prendasMes ? `Ganancia esperada de ${prendasMes} prendas: invertido ${dinero(invertidoMes)}, a la venta ${dinero(esperadoMes)}` : "Sin ingresos este mes"),
-      cifra(`Gastos de ${mes}`, dinero(gastosMes), gastos.length ? `${gastos.filter((g) => mismoMes(enDia(g))).length} gasto${gastos.filter((g) => mismoMes(enDia(g))).length === 1 ? "" : "s"} · cinta, gasolina, envíos…` : "Sin gastos registrados", gastosMes > 0 ? ".urgente" : "")));
+      cifra(`Ingresado en ${mes}`, dinero(esperadoMes - invertidoMes), prendasMes ? `Ganancia esperada de ${prendasMes} prendas: invertido ${dinero(invertidoMes)}, a la venta ${dinero(esperadoMes)}` : "Sin ingresos este mes")));
 
   ctx.pintar(
     el("div.cabeza",

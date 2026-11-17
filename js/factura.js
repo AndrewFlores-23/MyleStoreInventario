@@ -1,4 +1,4 @@
-// Factura de contado: la misma hoja sale en la app, en el enlace que recibe el cliente y al imprimir o guardar en PDF
+// Factura de contado: la misma hoja sale en la app, en el enlace público y al imprimir (la imagen para WhatsApp está en factura-imagen.js)
 import { el, adorno, dinero, fecha, talla, telefonoBonito } from "./util.js";
 
 const unidades = (articulos) => (articulos || []).reduce((s, a) => s + Number(a.cantidad), 0);
@@ -65,23 +65,6 @@ export function armarFactura({ tienda, factura: f, articulos, interna = false })
       el("div.contacto", [nombreTienda, "Moda & Beauty", contacto].filter(Boolean).join(" · "))));
 }
 
-// Mensaje listo para WhatsApp con el detalle y el total
-export function textoWhatsApp({ tienda, factura: f, articulos, enlace }) {
-  const t = tienda || {};
-  const nombre = (f.cliente_nombre || "").split(" ")[0];
-  const renglones = (articulos || []).map((a) => {
-    const variante = [a.talla, a.color].filter(Boolean).join(", ");
-    return `• ${a.cantidad} × ${a.nombre}${variante ? ` (${variante})` : ""} — ${dinero(a.subtotal ?? a.cantidad * a.precio_unitario)}`;
-  });
-  const partes = [`Hola ${nombre}, le saluda ${t.nombre_tienda || "Myle Store"}.`, "", `Esta es su factura ${f.numero}. ¡Gracias por su compra!`, "", ...renglones];
-  if (Number(f.envio) > 0) partes.push(`Envío: ${dinero(f.envio)}`);
-  if (Number(f.descuento) > 0) partes.push(`Descuento: −${dinero(f.descuento)}`);
-  partes.push(`*Total: ${dinero(f.total)}*`);
-  if (f.forma_pago) partes.push(`Pagado por ${f.forma_pago}`);
-  if (enlace) partes.push("", `Vea su factura aquí: ${enlace}`);
-  return partes.join("\n");
-}
-
 // Mensaje de WhatsApp para un apartado: el pedido, el total y cómo pagar (sin factura todavía)
 export function textoApartado({ tienda, apartado: ap, articulos }) {
   const t = tienda || {};
@@ -116,13 +99,6 @@ export async function compartirFactura({ titulo, texto, enlace }) {
     prompt("Copie el enlace de la factura:", enlace);
     return "mostrado";
   }
-}
-
-export function enlaceFactura(token) {
-  const u = new URL("factura.html", location.href);
-  u.hash = "";
-  u.search = `?t=${token}` + (new URLSearchParams(location.search).has("demo") ? "&demo" : "");
-  return u.href;
 }
 
 // Imprime solo la hoja; en el celular o la compu se puede elegir "Guardar como PDF"

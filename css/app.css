@@ -884,6 +884,9 @@ button.renglon:first-child { border-top: 0; }
 .factura-pie .gracias { font: italic 500 20px var(--f-marca); color: var(--acento-papel); }
 .factura-pie .contacto { margin-top: 4px; color: var(--tinta-3); font-size: 12.5px; }
 
+/* La factura en imagen, como se va a enviar */
+.vista-imagen { display: block; width: 100%; max-width: 460px; height: auto; margin: 0 auto; border-radius: 12px; box-shadow: 0 10px 30px rgba(120, 30, 60, 0.16); }
+
 @container (max-width: 560px) {
   .factura { padding: 32px 20px 26px; font-size: 13.5px; border-radius: 16px; outline-offset: -8px; }
   .factura-logo { width: 190px; }

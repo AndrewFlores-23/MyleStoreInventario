@@ -1,11 +1,12 @@
 // Facturación: la factura de contado. Se emite directo (las prendas salen del inventario) o desde un apartado
-// (las prendas ya salieron al apartarse). La misma hoja se envía por WhatsApp, se comparte y se imprime.
+// (las prendas ya salieron al apartarse). Se envía como imagen por WhatsApp y se puede imprimir.
 import { datos } from "../datos.js";
 import { estado, cargarProductos, ir } from "../estado.js";
-import { el, icono, dinero, fecha, fechaHora, hace, sinTildes, telefonoBonito, telefonoWa, mismoMes, esHoy, nombreMes,
+import { el, icono, dinero, fecha, fechaHora, hace, sinTildes, telefonoBonito, mismoMes, esHoy, nombreMes,
   trabajando, avisar, mensajeError, abrirHoja } from "../util.js";
-import { marcaProducto, sellosFactura, unidades, vacio } from "../componentes.js";
-import { armarFactura, textoWhatsApp, enlaceFactura, imprimirFactura, compartirFactura } from "../factura.js";
+import { marcaProducto, sellosFactura, unidades, costoFactura, gananciaFactura, vacio } from "../componentes.js";
+import { armarFactura, imprimirFactura } from "../factura.js";
+import { imagenFactura, compartirImagen, descargarImagen } from "../factura-imagen.js";
 import { armarPedido, camposCliente } from "./pedido.js";
 
 const FORMAS_PAGO = ["SINPE Móvil", "Efectivo", "Transferencia", "Tarjeta", "Otro"];
@@ -45,10 +46,12 @@ async function vistaLista(_pagina, ctx) {
       return palabras.every((w) => texto.includes(w));
     });
     const monto = elegidas.reduce((s, f) => s + Number(f.total), 0);
+    const ganancia = elegidas.reduce((s, f) => s + gananciaFactura(f), 0);
     resumen.replaceChildren(
       el("span", el("b", elegidas.length), ` factura${elegidas.length === 1 ? "" : "s"}`),
       el("span", el("b", unidades(elegidas.flatMap((f) => f.articulos))), " prendas"),
-      el("span", filtroLista === "anuladas" ? "anulado " : "vendido ", el("b", dinero(monto))));
+      el("span", filtroLista === "anuladas" ? "anulado " : "vendido ", el("b", dinero(monto))),
+      filtroLista === "anuladas" ? null : el("span", "ganancia ", el("b", dinero(ganancia))));
     lista.replaceChildren(...(elegidas.length ? elegidas.map(fila) : [
       facturas.length
         ? vacio("billete", "No hay facturas aquí.")
@@ -165,16 +168,22 @@ async function vistaDetalle(_pagina, ctx, id) {
     ctx.pintar(vacio("billete", "Esa factura no existe.", null, el("a.btn", { href: "#/facturacion" }, "Ver facturas")));
     return;
   }
-  const enlace = enlaceFactura(f.token);
+  // La imagen se arma al abrir la factura: el celular solo deja compartir justo al tocar, sin esperas
+  let imagen = null;
+  const prepararImagen = () => {
+    imagen = imagenFactura({ tienda: estado.ajustes, factura: f, articulos: f.articulos });
+    imagen.catch((e) => console.error(e));
+  };
 
   const franja = () => {
     const n = unidades(f.articulos);
     const prendas = `${n} prenda${n === 1 ? "" : "s"}`;
     if (f.estado === "anulada") return el("div.franja-estado.anulado", icono("anular"), el("div", el("strong", "Anulada"), el("span", `${fecha(f.anulada_en)} · ${prendas} de vuelta al inventario`)));
-    return el("div.franja-estado.vendido", icono("check"), el("div", el("strong", `Cobrado · ${dinero(f.total)}`), el("span", `${prendas} · ${f.forma_pago || "pagado"} · ${hace(f.creado_en)}`)));
+    return el("div.franja-estado.vendido", icono("check"), el("div", el("strong", `Cobrado · ${dinero(f.total)}`), el("span", `${prendas} · ${f.forma_pago || "pagado"} · ganancia ${dinero(gananciaFactura(f))} · ${hace(f.creado_en)}`)));
   };
 
   const pintar = () => {
+    prepararImagen();
     const hoja = armarFactura({ tienda: estado.ajustes, factura: f, articulos: f.articulos, interna: true });
     const factura = el("details.factura-plegable", { open: !matchMedia("(max-width: 960px)").matches },
       el("summary", el("span", icono("imprimir", "chico"), "Ver la factura"), icono("atras", "chico flecha")),
@@ -192,30 +201,57 @@ async function vistaDetalle(_pagina, ctx, id) {
           el("div.panel",
             el("div.panel-titulo", el("h2", "Enviar la factura")),
             el("div.pila.chica",
-              el("a.btn.primario", { href: whatsapp(), target: "_blank", rel: "noopener" }, icono("chat"), f.cliente_telefono ? `WhatsApp a ${telefonoBonito(f.cliente_telefono)}` : "Enviar por WhatsApp"),
+              el("button.btn.primario", { type: "button", onclick: (ev) => enviarImagen(ev.currentTarget) }, icono("compartir"), "Compartir imagen"),
               el("div.fila-botones.pareja",
-                el("button.btn", { type: "button", onclick: compartir }, icono("compartir"), "Compartir"),
-                el("button.btn", { type: "button", onclick: () => imprimirFactura(hoja, `Factura ${f.numero} · ${f.cliente_nombre}`) }, icono("imprimir"), "Imprimir / PDF")))),
+                el("button.btn", { type: "button", onclick: verImagen }, icono("galeria"), "Ver imagen"),
+                el("button.btn", { type: "button", onclick: () => imprimirFactura(hoja, `Factura ${f.numero} · ${f.cliente_nombre}`) }, icono("imprimir"), "Imprimir")),
+              el("p.tenue", { style: "font-size:13px" }, "Sale como imagen con todo el detalle. En el celular elija WhatsApp y el chat del cliente."))),
           el("div.panel",
             el("div.panel-titulo", el("h2", "Cliente"), f.estado === "emitida" ? el("button.btn.fantasma.chico", { type: "button", onclick: editarCliente }, icono("editar", "chico"), "Editar") : null),
             el("div.recibo",
               f.cliente_telefono ? el("div.renglon-sub", "Teléfono: ", el("b", telefonoBonito(f.cliente_telefono))) : null,
               f.cliente_direccion ? el("div.renglon-sub", "Entrega: ", f.cliente_direccion) : null,
               f.forma_pago ? el("div.renglon-sub", "Pago: ", el("b", f.forma_pago), f.referencia_pago ? ` · ref. ${f.referencia_pago}` : "") : null,
+              el("div.renglon-sub", "Ganancia: ", el("b", dinero(gananciaFactura(f))), ` · costo de las prendas ${dinero(costoFactura(f))}`),
               f.notas ? el("div.renglon-sub", { style: "margin-top:6px" }, "Notas: ", f.notas) : null)),
           f.estado === "anulada" ? el("div.panel", el("p", `Anulada el ${fechaHora(f.anulada_en)}.`), f.motivo_anulacion ? el("p.suave", { style: "margin-top:6px" }, `Motivo: ${f.motivo_anulacion}`) : null) : null,
           f.estado === "emitida" ? el("button.btn.peligro", { type: "button", onclick: anular }, icono("anular"), "Anular factura") : null)));
   };
 
-  const whatsapp = () => {
-    const texto = encodeURIComponent(textoWhatsApp({ tienda: estado.ajustes, factura: f, articulos: f.articulos, enlace }));
-    const tel = telefonoWa(f.cliente_telefono);
-    return tel ? `https://wa.me/${tel}?text=${texto}` : `https://wa.me/?text=${texto}`;
-  };
-  async function compartir() {
-    const texto = textoWhatsApp({ tienda: estado.ajustes, factura: f, articulos: f.articulos });
-    const r = await compartirFactura({ titulo: `Factura ${f.numero} · ${estado.ajustes?.nombre_tienda || "Myle Store"}`, texto, enlace });
-    if (r === "copiado") avisar("Enlace copiado; péguelo donde quiera enviarlo");
+  const aviso = (r) => { if (r === "descargada") avisar("Imagen descargada; adjúntela en el chat de WhatsApp"); };
+  async function enviarImagen(boton) {
+    let archivo;
+    try {
+      archivo = await trabajando(boton, () => imagen, "Preparando…");
+    } catch (e) {
+      avisar("No se pudo crear la imagen de la factura. Intente de nuevo.", "error");
+      prepararImagen();
+      return;
+    }
+    const r = await compartirImagen(archivo);
+    // Si el celular no dejó compartir (la imagen tardó), se muestra para tocar de nuevo
+    if (r === "sin-permiso") verImagen();
+    aviso(r);
+  }
+  async function verImagen() {
+    let archivo;
+    try {
+      archivo = await imagen;
+    } catch (e) {
+      avisar("No se pudo crear la imagen de la factura. Intente de nuevo.", "error");
+      prepararImagen();
+      return;
+    }
+    const url = URL.createObjectURL(archivo);
+    abrirHoja({
+      titulo: `Factura ${f.numero}`,
+      cuerpo: el("img.vista-imagen", { src: url, alt: `Factura ${f.numero} de ${f.cliente_nombre}` }),
+      pie: [
+        el("button.btn.fantasma", { type: "button", onclick: () => descargarImagen(archivo) }, icono("ingreso"), "Descargar"),
+        el("button.btn.primario", { type: "button", onclick: async () => aviso(await compartirImagen(archivo)) }, icono("compartir"), "Compartir"),
+      ],
+      alCerrar: () => URL.revokeObjectURL(url),
+    });
   }
   async function anular() {
     const motivo = el("input", { placeholder: "Ej.: se devolvió, error al facturar" });

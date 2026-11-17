@@ -102,6 +102,10 @@ export function cajaDias(ap) {
 }
 
 export const unidades = (articulos) => (articulos || []).reduce((s, a) => s + Number(a.cantidad), 0);
+// Lo que costaron las prendas de una factura y lo que dejaron: precio final menos costo, menos el descuento (el envío no cuenta)
+export const costoFactura = (f) => (f.articulos || []).reduce((s, a) => s + Number(a.cantidad) * Number(a.costo_unitario || 0), 0);
+export const gananciaFactura = (f) =>
+  (f.articulos || []).reduce((s, a) => s + Number(a.subtotal ?? a.cantidad * a.precio_unitario), 0) - Number(f.descuento || 0) - costoFactura(f);
 
 // ---------- Historial ----------
 export function renglonMovimiento(m, { alAbrir, mostrarProducto = true } = {}) {

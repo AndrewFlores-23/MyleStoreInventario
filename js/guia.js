@@ -196,7 +196,7 @@ const ESCENAS = [
   },
   {
     titulo: "Facturar, gastos y movimientos", dur: 12000,
-    texto: "Cuando el cliente paga, se emite la <b>factura de contado</b> (directa o desde el apartado) y se le envía. Los <b>gastos</b> del negocio se anotan aparte, y todo queda en <b>Movimientos</b>.",
+    texto: "Cuando el cliente paga, se emite la <b>factura de contado</b> (directa o desde el apartado) y se le envía como <b>imagen</b> por WhatsApp. Los <b>gastos</b> del negocio se anotan aparte, y todo queda en <b>Movimientos</b>.",
     armar() {
       const forma = campo("Forma de pago", "SINPE Móvil");
       pantalla.replaceChildren(...marco("Apartados",
@@ -208,7 +208,7 @@ const ESCENAS = [
         pantalla.replaceChildren(...marco("Apartados",
           el("div.p-titulo.aparece", "Sofía Jiménez"),
           el("div.p-franja.listo.aparece", el("span", "✓"), el("div", el("b", "Cobrado · ₡42.300"), "2 prendas · SINPE Móvil")),
-          el("div.p-panel.aparece-2", boton("WhatsApp a 8800-1122"), el("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px" }, boton("Compartir", ".suave"), boton("Imprimir / PDF", ".suave"))),
+          el("div.p-panel.aparece-2", boton("Compartir imagen"), el("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px" }, boton("Ver imagen", ".suave"), boton("Imprimir", ".suave"))),
           el("div.p-factura.aparece-3", logo(), el("div.t", "Factura de contado"),
             el("div.cliente", el("b", "Sofía Jiménez"), el("br"), "FC-0001 · 2 prendas · ₡42.300"),
             el("div.p-sello-grande.cancelado", "Cancelado"))));
