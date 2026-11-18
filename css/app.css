@@ -1268,3 +1268,28 @@ dialog.hoja.saliendo { animation: hoja-aparece 0.14s ease-in reverse; }
 
 .panel-facturar { border-color: color-mix(in srgb, var(--acento) 40%, transparent); background: color-mix(in srgb, var(--acento) 5%, var(--panel)); }
 @media (max-width: 400px) { .pestanas a { font-size: 10px; } }
+
+/* ---------- Historial del apartado: cada cambio con su fecha y hora ---------- */
+.columna-apartado { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.columna-apartado > .panel { margin-top: 0; }
+.linea-tiempo { display: flex; flex-direction: column; }
+.linea-tiempo .hito { display: flex; gap: 12px; padding-top: 8px; }
+.linea-tiempo .hito-riel { display: flex; flex-direction: column; align-items: center; flex: none; width: 28px; }
+.linea-tiempo .hito-linea { flex: 1; width: 0; min-height: 12px; margin-top: 4px; border-left: 1.5px dashed var(--borde-fuerte); }
+.linea-tiempo .hito:last-child .hito-linea { display: none; }
+.linea-tiempo .hito-marca { display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 50%; border: 1.5px solid var(--borde-fuerte); background: var(--panel); color: var(--texto-2); }
+.linea-tiempo .hito-marca .ico { width: 14px; height: 14px; }
+.linea-tiempo .hito.creado .hito-marca { border-color: var(--acento); color: var(--acento); }
+.linea-tiempo .hito.cambio .hito-marca { border-color: var(--oro); color: var(--oro); }
+.linea-tiempo .hito.listo .hito-marca { border: 0; background: var(--listo); color: var(--fondo); }
+.linea-tiempo .hito.anulado .hito-marca { border-color: var(--urgente); color: var(--urgente); }
+.linea-tiempo .hito-cuerpo { flex: 1; min-width: 0; padding: 4px 0 14px; }
+.linea-tiempo .hito-titulo { display: block; font-weight: 500; color: var(--texto); text-decoration: none; }
+.linea-tiempo a.hito-titulo:hover { color: var(--acento); }
+.linea-tiempo .hito-fecha { margin-top: 2px; font: 500 12.5px var(--f-num); color: var(--texto-3); }
+.linea-tiempo .hito-lineas { margin: 6px 0 0; padding: 0; list-style: none; font-size: 13.5px; color: var(--texto-2); }
+.linea-tiempo .hito-lineas li { padding: 2px 0; }
+.linea-tiempo .hito-lineas b { display: inline-block; min-width: 26px; font-family: var(--f-num); font-weight: 600; color: var(--texto); }
+.linea-tiempo .hito-lineas .menos b { color: var(--urgente); }
+.linea-tiempo .hito-detalle { margin-top: 5px; font-size: 13px; color: var(--texto-3); }
+.fecha-cambio { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border: 1px dashed color-mix(in srgb, var(--acento) 55%, transparent); border-radius: 999px; font-size: 11.5px; font-weight: 600; color: var(--acento); white-space: nowrap; }

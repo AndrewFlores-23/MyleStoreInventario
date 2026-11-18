@@ -2,9 +2,9 @@
 // No lleva factura ni pago: cuando el cliente paga, el apartado se pasa a Facturación y ahí sale la factura de contado.
 import { datos } from "../datos.js";
 import { estado, cargarProductos, ponerPendientes, ir } from "../estado.js";
-import { el, icono, dinero, numero, fecha, fechaHora, hace, sinTildes, telefonoBonito, telefonoWa, campoDinero,
+import { el, icono, dinero, numero, fecha, fechaCorta, fechaHora, hace, sinTildes, telefonoBonito, telefonoWa, campoDinero,
   trabajando, avisar, mensajeError, abrirHoja, confirmar } from "../util.js";
-import { marcaProducto, sellosApartado, cajaDias, unidades, vacio } from "../componentes.js";
+import { marcaProducto, sellosApartado, cajaDias, unidades, vacio, nombreCompleto } from "../componentes.js";
 import { textoApartado } from "../factura.js";
 import { armarPedido, camposCliente } from "./pedido.js";
 
@@ -127,7 +127,9 @@ async function vistaNuevo(_pagina, ctx) {
 
 // ---------- Detalle ----------
 async function vistaDetalle(_pagina, ctx, id) {
-  let ap = await datos.apartado(id);
+  // Con el apartado se traen sus movimientos: cada prenda que entró o salió, con su fecha y hora, para el historial
+  const cargar = () => Promise.all([datos.apartado(id), datos.movimientos({ apartadoId: id, limite: 300 }).catch(() => null)]);
+  let [ap, movs] = await cargar();
   if (!ap) {
     ctx.pintar(vacio("bolsa", "Ese apartado no existe.", null, el("a.btn", { href: "#/apartados" }, "Ver apartados")));
     return;
@@ -142,6 +144,19 @@ async function vistaDetalle(_pagina, ctx, id) {
     return el("div.franja-estado.pendiente", icono("bolsa"), el("div", el("strong", `Apartado · ${dinero(ap.total)}`), el("span", `${prendas} · apartado ${hace(ap.creado_en)} · pendiente de facturar`)));
   };
 
+  // Cuándo entró cada prenda: si no estaba al crear el apartado, se marca el día en que se agregó
+  const fechaAgregada = (a) => {
+    const apartadas = (movs || []).filter((m) => m.motivo === "apartado" && m.producto_id === a.producto_id);
+    const despues = apartadas.filter((m) => !mismaAccion(m.creado_en, ap.creado_en));
+    if (!despues.length) return null;
+    const ultimo = despues.reduce((x, m) => (new Date(m.creado_en) > new Date(x.creado_en) ? m : x));
+    const desdeElInicio = apartadas.length > despues.length;
+    return el("span.fecha-cambio", desdeElInicio ? `+${ultimo.cantidad} el ${fechaCorta(ultimo.creado_en)}` : `agregada el ${fechaCorta(ultimo.creado_en)}`);
+  };
+  const historial = () => el("section.panel.historial-apartado",
+    el("div.panel-titulo", el("h2", "Historial"), el("span.tenue", { style: "font-size:13px" }, "Cada cambio con su fecha y hora")),
+    movs == null ? el("p.tenue", "No se pudo cargar el historial.") : el("div.linea-tiempo", eventosApartado(ap, movs).map(pasoHistorial)));
+
   const pintar = () => {
     const pendiente = ap.estado === "pendiente";
     ctx.pintar(
@@ -152,16 +167,18 @@ async function vistaDetalle(_pagina, ctx, id) {
           el("div.renglon-sub", { style: "margin-top:6px" }, el("span.serie", ap.numero), sellosApartado(ap)))),
       franja(),
       el("div.dos-columnas",
+        el("div.columna-apartado",
         el("section.panel",
           el("div.panel-titulo", el("h2", "Prendas apartadas"), pendiente ? el("button.btn.fantasma.chico", { type: "button", onclick: modificarPrendas }, icono("editar", "chico"), "Modificar") : null),
           el("div.lista", ap.articulos.map((a) => el("div.renglon",
             marcaProducto(a),
-            el("div.renglon-cuerpo", el("div.renglon-titulo", a.nombre), el("div.renglon-sub", a.talla ? el("span.talla", a.talla) : null, a.color || "")),
+            el("div.renglon-cuerpo", el("div.renglon-titulo", a.nombre), el("div.renglon-sub", a.talla ? el("span.talla", a.talla) : null, a.color || "", fechaAgregada(a))),
             el("div.renglon-fin", el("div.num", dinero(a.subtotal ?? a.cantidad * a.precio_unitario)), el("small", `${a.cantidad} × ${dinero(a.precio_unitario)}`))))),
           el("div.recibo", { style: "margin-top:10px" },
             el("div.linea", el("span.et", "Subtotal"), el("span.puntos"), el("span.val", dinero(ap.subtotal))),
             Number(ap.envio) > 0 ? el("div.linea", el("span.et", "Envío"), el("span.puntos"), el("span.val", dinero(ap.envio))) : null,
             el("div.linea.total", el("span.et", "Total"), el("span.puntos"), el("span.val", dinero(ap.total))))),
+        historial()),
         el("aside.acciones-apartado",
           pendiente ? el("div.panel.panel-facturar",
             el("div.panel-titulo", el("h2", "¿Ya pagó?")),
@@ -208,7 +225,7 @@ async function vistaDetalle(_pagina, ctx, id) {
         await trabajando(boton, () => datos.anularApartado(ap.id, motivo.value), "Anulando…");
         cerrar();
         await cargarProductos();
-        ap = await datos.apartado(ap.id);
+        [ap, movs] = await cargar();
         pintar();
         avisar(`${ap.numero} anulado; las prendas volvieron al inventario`);
         contarPendientes();
@@ -294,7 +311,7 @@ async function vistaDetalle(_pagina, ctx, id) {
         await trabajando(boton, () => datos.modificarApartado(ap.id, pedido.articulos()), "Guardando…");
         cerrar();
         await cargarProductos();
-        ap = await datos.apartado(ap.id);
+        [ap, movs] = await cargar();
         pintar();
         avisar("Prendas del apartado actualizadas");
       } catch (e) {
@@ -305,6 +322,46 @@ async function vistaDetalle(_pagina, ctx, id) {
     });
   }
   pintar();
+}
+
+// ---------- Historial del apartado ----------
+// Los movimientos de una misma acción (crear, modificar o anular) se guardan juntos con la misma hora: cada grupo es un paso.
+const mismaAccion = (a, b) => Math.abs(new Date(a) - new Date(b)) < 1000;
+function eventosApartado(ap, movs) {
+  const orden = [...movs].sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en) || a.id - b.id);
+  const grupos = [];
+  for (const m of orden) {
+    const g = grupos[grupos.length - 1];
+    if (g && mismaAccion(g.cuando, m.creado_en)) g.items.push(m);
+    else grupos.push({ cuando: m.creado_en, items: [m] });
+  }
+  const linea = (m) => ({ quita: m.motivo !== "apartado", n: m.cantidad, nombre: nombreCompleto(m.producto || { nombre: "Prenda" }) });
+  const eventos = [];
+  for (const g of grupos) {
+    if (mismaAccion(g.cuando, ap.creado_en)) {
+      eventos.push({ cuando: ap.creado_en, clase: "creado", icono: "bolsa", titulo: "Apartado creado", lineas: g.items.map(linea) });
+    } else if (g.items.every((m) => m.motivo === "anulacion")) {
+      eventos.push({ cuando: g.cuando, clase: "anulado", icono: "anular", titulo: "Anulado", detalle: `${unidades(g.items)} ${unidades(g.items) === 1 ? "prenda volvió" : "prendas volvieron"} al inventario`, nota: ap.motivo_anulacion ? `Motivo: ${ap.motivo_anulacion}` : null });
+    } else {
+      eventos.push({ cuando: g.cuando, clase: "cambio", icono: "editar", titulo: "Prendas modificadas", lineas: g.items.map(linea) });
+    }
+  }
+  if (ap.facturado_en) eventos.push({ cuando: ap.facturado_en, clase: "listo", icono: "check", titulo: `Facturado${ap.factura?.numero ? ` · ${ap.factura.numero}` : ""}`, detalle: "Las prendas quedaron vendidas", enlace: ap.factura ? `#/facturacion/${ap.factura.id}` : null });
+  // Anulado desde una factura anulada: no deja movimientos en el apartado, así que el paso sale de la fecha del apartado
+  if (ap.anulado_en && !eventos.some((e) => e.clase === "anulado" && mismaAccion(e.cuando, ap.anulado_en))) {
+    eventos.push({ cuando: ap.anulado_en, clase: "anulado", icono: "anular", titulo: "Anulado", detalle: "Las prendas volvieron al inventario", nota: ap.motivo_anulacion ? `Motivo: ${ap.motivo_anulacion}` : null });
+  }
+  return eventos.sort((a, b) => new Date(b.cuando) - new Date(a.cuando));
+}
+function pasoHistorial(e) {
+  return el("div.hito." + e.clase,
+    el("div.hito-riel", el("div.hito-marca", icono(e.icono, "chico")), el("div.hito-linea")),
+    el("div.hito-cuerpo",
+      e.enlace ? el("a.hito-titulo", { href: e.enlace }, e.titulo) : el("div.hito-titulo", e.titulo),
+      el("div.hito-fecha", fechaHora(e.cuando)),
+      e.lineas?.length ? el("ul.hito-lineas", e.lineas.map((l) => el("li" + (l.quita ? ".menos" : ".mas"), el("b", `${l.quita ? "−" : "+"}${l.n}`), ` ${l.nombre}`))) : null,
+      e.detalle ? el("div.hito-detalle", e.detalle) : null,
+      e.nota ? el("div.hito-detalle", e.nota) : null));
 }
 
 async function contarPendientes() {

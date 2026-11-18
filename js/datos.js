@@ -159,10 +159,11 @@ async function crearReal() {
         p_producto_id: d.productoId, p_cantidad: d.cantidad, p_motivo: d.motivo, p_precio: d.precio ?? null, p_nota: d.nota || null,
       });
     },
-    async movimientos({ tipo, productoId, limite = 200 } = {}) {
+    async movimientos({ tipo, productoId, apartadoId, limite = 200 } = {}) {
       let q = sb.from("movimientos").select(LISTA_MOVIMIENTOS).order("creado_en", { ascending: false }).order("id", { ascending: false }).limit(limite);
       if (tipo) q = q.eq("tipo", tipo);
       if (productoId) q = q.eq("producto_id", productoId);
+      if (apartadoId) q = q.eq("apartado_id", apartadoId);
       return respuesta(await q);
     },
 

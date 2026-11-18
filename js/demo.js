@@ -50,7 +50,10 @@ function mover(db, m, cuando) {
   return mov;
 }
 const producto = (db, id) => db.productos.find((p) => p.id === id);
-const apartadoCon = (db, ap) => ({ ...ap, articulos: db.articulos.filter((a) => a.apartado_id === ap.id) });
+const apartadoCon = (db, ap) => {
+  const f = ap.factura_id ? (db.facturas || []).find((x) => x.id === ap.factura_id) : null;
+  return { ...ap, articulos: db.articulos.filter((a) => a.apartado_id === ap.id), factura: f ? { id: f.id, numero: f.numero, estado: f.estado } : null };
+};
 const total = (ap) => Number(ap.subtotal) + Number(ap.envio);
 
 // ---------- Reglas (las mismas de la migración) ----------
@@ -362,6 +365,7 @@ function sembrar() {
   nuevoGasto(db, { descripcion: "Gasolina para entregas", monto: 8000, categoria: "transporte", pagadoCon: "SINPE Móvil" }, dia(2, 18));
   const ap2 = apartar(db, { clienteNombre: "Daniela Vargas", clienteTelefono: "87654321", clienteDireccion: "Alajuela centro · envío por Correos", envio: 2500, articulos: [{ producto_id: jeans.producto_id, cantidad: 1 }, { producto_id: blusaS.producto_id, cantidad: 1 }] }, dia(5, 13));
   sacar(db, { productoId: camisa.producto_id, cantidad: 1, motivo: "regalo", nota: "Regalo de cumpleaños" }, dia(4, 16));
+  modificar(db, ap2.id, [{ producto_id: jeans.producto_id, cantidad: 1 }, { producto_id: blusaS.producto_id, cantidad: 1 }, { producto_id: top.producto_id, cantidad: 1 }], dia(1, 16));
   sacar(db, { productoId: blusaM.producto_id, cantidad: 1, motivo: "danado", nota: "Mancha en la manga" }, dia(3, 10));
   const ap3 = apartar(db, { clienteNombre: "María Fernanda Rojas", clienteTelefono: "88881234", clienteDireccion: "Heredia, San Pablo · mensajero", envio: 2000, articulos: [{ producto_id: vestido.producto_id, cantidad: 1 }, { producto_id: top.producto_id, cantidad: 2, precio_unitario: 7000 }] }, dia(2, 19));
   apartar(db, { clienteNombre: "Valeria Mora", clienteTelefono: "60123456", articulos: [{ producto_id: blusaM.producto_id, cantidad: 1 }, { producto_id: enagua.producto_id, cantidad: 1 }] }, dia(0, 9));
@@ -450,8 +454,8 @@ export const datosDemo = {
     .slice(0, limite)
     .map((i) => ({ ...i, producto: producto(db, i.producto_id) }))),
   registrarSalida: (d) => cambiar((db) => sacar(db, d)),
-  movimientos: ({ tipo, productoId, limite = 200 } = {}) => consultar((db) => db.movimientos
-    .filter((m) => (!tipo || m.tipo === tipo) && (!productoId || m.producto_id === productoId))
+  movimientos: ({ tipo, productoId, apartadoId, limite = 200 } = {}) => consultar((db) => db.movimientos
+    .filter((m) => (!tipo || m.tipo === tipo) && (!productoId || m.producto_id === productoId) && (!apartadoId || m.apartado_id === apartadoId))
     .sort((a, b) => b.creado_en.localeCompare(a.creado_en) || b.id - a.id)
     .slice(0, limite)
     .map((m) => {
